@@ -1493,21 +1493,15 @@ export default function Onboarding() {
                 <p className="text-gray-600">Add your card to start your subscription</p>
               </div>
 
-              {paymentError && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-red-900 mb-1">Payment Error</p>
-                    <p className="text-sm text-red-800">{paymentError}</p>
-                  </div>
-                  <button
-                    onClick={() => setPaymentError('')}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 mb-6">
+                <Zap className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">3-Day Free Trial Included</p>
+                  <p className="text-sm text-blue-800">
+                    Your card will not be charged for the first 72 hours. You can cancel anytime before the trial ends.
+                  </p>
                 </div>
-              )}
+              </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div>

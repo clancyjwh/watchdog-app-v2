@@ -1,7 +1,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Activity } from 'lucide-react';
+import { Eye, EyeOff, Activity, Zap } from 'lucide-react';
 import { trackPageView, trackSignup } from '../utils/analytics';
 
 export default function Signup() {
@@ -132,6 +132,13 @@ export default function Signup() {
             >
               {loading ? 'Creating account...' : 'Create account'}
             </button>
+
+            <div className="flex items-center gap-2 justify-center py-2 px-3 bg-blue-50 border border-blue-100 rounded mt-2">
+              <Zap className="w-4 h-4 text-blue-600" />
+              <p className="text-xs text-blue-800 font-medium">
+                Includes 3-day free trial. No charge for 72 hours.
+              </p>
+            </div>
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200 text-center">
