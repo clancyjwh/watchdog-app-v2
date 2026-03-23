@@ -43,6 +43,8 @@ export type Company = {
 export type Profile = {
   id: string;
   user_id: string;
+  full_name: string;
+  email: string;
   company_name: string;
   business_description: string;
   industry: string;
@@ -50,6 +52,8 @@ export type Profile = {
   content_types: string[];
   current_company_id: string | null;
   manual_scan_credits: number;
+  subscription_tier?: string;
+  subscription_status?: string;
   created_at: string;
   updated_at: string;
 };
