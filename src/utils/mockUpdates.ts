@@ -206,7 +206,7 @@ export const generateMockUpdates = async (
   }
 
   const subscriptionRes = await supabase
-    .from('subscriptions')
+    .from('watchdog_subscribers')
     .select('*')
     .eq('profile_id', profileId)
     .maybeSingle();
@@ -280,7 +280,7 @@ export const generateMockUpdates = async (
 
   if (subscriptionRes.data) {
     await supabase
-      .from('subscriptions')
+      .from('watchdog_subscribers')
       .update({ last_update_delivered_at: new Date().toISOString() })
       .eq('id', subscriptionRes.data.id);
   }

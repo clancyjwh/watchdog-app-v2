@@ -258,12 +258,13 @@ export default function Onboarding() {
             location_country: locationCountry,
             location_province: locationProvince,
             location_city: locationCity,
-            business_context: businessContext.join(', '),
+            business_context: businessContext,
           })
           .eq('id', companyId);
 
         if (updateError) {
           console.error('Error updating company:', updateError);
+          setFinishError(`Failed to update company: ${updateError.message}`);
           setLoading(false);
           return;
         }
@@ -279,13 +280,14 @@ export default function Onboarding() {
             location_country: locationCountry,
             location_province: locationProvince,
             location_city: locationCity,
-            business_context: businessContext.join(', '),
+            business_context: businessContext,
           })
           .select()
           .single();
 
         if (insertError) {
           console.error('Error creating company:', insertError);
+          setFinishError(`Failed to create company: ${insertError.message}`);
           setLoading(false);
           return;
         }
@@ -302,6 +304,7 @@ export default function Onboarding() {
 
       if (error) {
         console.error('Error updating profile:', error);
+        setFinishError(`Failed to update profile: ${error.message}`);
         setLoading(false);
         return;
       }
@@ -377,20 +380,16 @@ export default function Onboarding() {
       const nextScanDate = new Date();
       nextScanDate.setDate(today.getDate() + 7);
       
-      const { error: subscriptionError } = await supabase.from('subscriptions').insert({
+      const { error: subscriptionError } = await supabase.from('watchdog_subscribers').insert({
         profile_id: profile.id,
         company_id: currentCompany.id,
-        frequency: 'weekly',
-        delivery_method: 'dashboard',
-        relevance_threshold: 1,
-        first_update_date: today.toISOString().split('T')[0],
-        next_scan_due_date: nextScanDate.toISOString(), // Set next scan for 7 days later
+        tier: selectedTier,
+        status: 'active',
         monthly_price: tierConfig.monthlyPrice,
-        subscription_tier: selectedTier,
-        subscription_status: 'active',
-        stripe_product_id: (tierConfig as any).productId,
+        included_credits: tierConfig.monthlyCredits,
+        current_period_end: nextScanDate.toISOString(),
       });
-      if (subscriptionError) throw new Error(`Failed to save subscription: ${subscriptionError.message}`);
+      if (subscriptionError) throw new Error(`Failed to save subscription details: ${subscriptionError.message}`);
 
       // Update companies table with next scan date and automated scan tracking
       await supabase.from('companies').update({
@@ -473,7 +472,7 @@ export default function Onboarding() {
             industry: industry,
             monitoringGoals: monitoringGoals.join(', '),
             location: [locationCity, locationProvince, locationCountry].filter(Boolean).join(', '),
-            businessContext: businessContext.join(', '),
+            businessContext: businessContext,
             dateFrom,
             dateTo: today,
             scanOptions: {
@@ -484,6 +483,11 @@ export default function Onboarding() {
             }
           }),
         });
+
+        if (!perplexityResponse.ok) {
+          const errorData = await perplexityResponse.json().catch(() => ({}));
+          throw new Error(errorData.details || errorData.error || `Initial scan search failed (${perplexityResponse.status})`);
+        }
 
         const perplexityData = await perplexityResponse.json();
         const allUpdates = perplexityData.updates || [];
