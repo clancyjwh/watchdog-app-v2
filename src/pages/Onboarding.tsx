@@ -578,6 +578,15 @@ export default function Onboarding() {
           body: JSON.stringify({
             full_name: profile.full_name,
             email: profile.email,
+            company_name: companyName,
+            industry: industry,
+            description: businessDescription,
+            monitoring_goals: monitoringGoals.join(', '),
+            location: [locationCity, locationProvince, locationCountry].filter(Boolean).join(', '),
+            tier: selectedTier,
+            sources_count: selectedSources.length,
+            topics_count: selectedTopics.length,
+            timestamp: new Date().toISOString()
           }),
         });
       } catch (webhookError) {
@@ -1206,9 +1215,18 @@ export default function Onboarding() {
                   return (
                   <button
                     key={source.url}
-                    onClick={() => toggleSource(source)}
+                    onClick={() => {
+                      const isSelected = selectedSources.find((s) => s.url === source.url);
+                      const tierLimit = getTierConfig(selectedTier).sources;
+                      
+                      if (!isSelected && selectedSources.length >= tierLimit) {
+                        alert(`Your ${getTierConfig(selectedTier).name} plan is limited to ${tierLimit} sources. Please upgrade to add more.`);
+                        return;
+                      }
+                      toggleSource(source);
+                    }}
                     className={`w-full px-4 py-4 rounded-lg border-2 text-left transition-all ${
-                      isSelected
+                      selectedSources.find((s) => s.url === source.url)
                         ? 'border-blue-600 bg-blue-50'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
