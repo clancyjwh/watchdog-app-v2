@@ -26,14 +26,17 @@ async function getStripeKey(): Promise<string> {
 interface CheckoutRequest {
   type: "subscription" | "credits";
   tier?: "basic" | "premium" | "enterprise";
-  billing_period?: "monthly" | "yearly";
+  profile_id: string;
+  user_email: string;
+  company_id?: string;
+  company_name?: string;
+  industry?: string;
+  description?: string;
+  monitoring_goals?: string | string[];
   credit_package?: {
     credits: number;
     price: number;
   };
-  profile_id: string;
-  user_email: string;
-  company_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -55,20 +58,24 @@ Deno.serve(async (req: Request) => {
 
     if (requestData.type === "subscription") {
       const TIER_PRICES = {
-        basic: { monthly: 49, yearly: 470 },
-        premium: { monthly: 149, yearly: 1430 },
-        enterprise: { monthly: 499, yearly: 4790 },
+        basic: 59,
+        premium: 99,
+        enterprise: 199,
+      };
+
+      const TIER_PRODUCT_IDS = {
+        basic: 'prod_TqxKX5neHjRYiu',
+        premium: 'prod_TqxLzaw1hDuXLo',
+        enterprise: 'prod_U7pGAo3uBjGCkb',
       };
 
       const tier = requestData.tier || "basic";
-      const tierConfig = TIER_PRICES[tier];
-      const isYearly = requestData.billing_period === "yearly";
-      const price = isYearly ? tierConfig.yearly : tierConfig.monthly;
+      const price = TIER_PRICES[tier];
 
       const TIER_FEATURES = {
-        basic: "1 company, 5 sources, 10 scans/month, weekly updates",
-        premium: "3 companies, 25 sources, 50 scans/month, daily updates, AI insights",
-        enterprise: "Unlimited companies & sources, 200 scans/month, real-time updates, API access",
+        basic: "5 companies, 10 sources, 100 manual credits/month, weekly updates",
+        premium: "25 companies, 50 sources, 300 manual credits/month, daily updates, AI insights",
+        enterprise: "Unlimited companies, 200 sources, 600 manual credits/month, real-time updates",
       };
 
       const session = await stripe.checkout.sessions.create({
@@ -77,12 +84,9 @@ Deno.serve(async (req: Request) => {
           {
             price_data: {
               currency: "usd",
-              product_data: {
-                name: `${tier.charAt(0).toUpperCase()}${tier.slice(1)} Plan`,
-                description: TIER_FEATURES[tier],
-              },
+              product: TIER_PRODUCT_IDS[tier],
               unit_amount: price * 100,
-              recurring: { interval: isYearly ? "year" : "month" },
+              recurring: { interval: "month" },
             },
             quantity: 1,
           },
@@ -95,7 +99,13 @@ Deno.serve(async (req: Request) => {
           company_id: requestData.company_id || "",
           type: "subscription",
           tier: tier,
-          billing_period: requestData.billing_period || "monthly",
+          billing_period: "monthly",
+          company_name: requestData.company_name || "",
+          industry: requestData.industry || "",
+          description: requestData.description || "",
+          monitoring_goals: Array.isArray(requestData.monitoring_goals) 
+            ? requestData.monitoring_goals.join(', ') 
+            : requestData.monitoring_goals || ""
         },
       });
 

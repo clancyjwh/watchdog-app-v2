@@ -18,6 +18,10 @@ interface SignupData {
   amount_paid?: number;
   currency?: string;
   period_end?: number;
+  company_name?: string;
+  industry?: string;
+  description?: string;
+  monitoring_goals?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -29,6 +33,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const body: SignupData = await req.json();
     const {
       full_name,
       email,
@@ -38,8 +43,12 @@ Deno.serve(async (req: Request) => {
       subscription_id,
       amount_paid,
       currency,
-      period_end
-    }: SignupData = await req.json();
+      period_end,
+      company_name,
+      industry,
+      description,
+      monitoring_goals
+    } = body;
 
     if (!full_name || !email || !plan) {
       return new Response(
@@ -66,6 +75,11 @@ Deno.serve(async (req: Request) => {
         amount_paid,
         currency,
         period_end: period_end ? new Date(period_end * 1000).toISOString() : null,
+        company_name,
+        industry,
+        description,
+        monitoring_goals,
+        timestamp: new Date().toISOString()
       }),
     });
 

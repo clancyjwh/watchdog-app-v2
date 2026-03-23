@@ -94,8 +94,6 @@ export type PricingBreakdown = {
   deepAnalysisPrice: number;
   subtotal: number;
   monthlyTotal: number;
-  annualTotal: number;
-  annualSavings: number;
   includedCredits: number;
   includedScans: number;
 };
@@ -110,9 +108,6 @@ export function calculatePricing(config: PricingConfig): PricingBreakdown {
 
   const subtotal = basePrice + deepAnalysisPrice;
   const monthlyTotal = subtotal;
-  const annualBeforeDiscount = monthlyTotal * 12;
-  const annualTotal = annualBeforeDiscount * 0.85; // 15% discount
-  const annualSavings = annualBeforeDiscount - annualTotal;
 
   const includedCredits = tierConfig.monthlyCredits;
   const includedScans = Math.floor(includedCredits / CREDITS_PER_SCAN);
@@ -125,8 +120,6 @@ export function calculatePricing(config: PricingConfig): PricingBreakdown {
     deepAnalysisPrice,
     subtotal,
     monthlyTotal,
-    annualTotal,
-    annualSavings,
     includedCredits,
     includedScans,
   };

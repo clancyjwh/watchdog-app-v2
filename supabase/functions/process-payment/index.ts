@@ -29,12 +29,15 @@ interface PaymentRequest {
   profile_id: string;
   user_email: string;
   tier?: 'basic' | 'premium' | 'enterprise';
-  billing_period?: 'monthly' | 'yearly';
+  company_id?: string;
+  company_name?: string;
+  industry?: string;
+  description?: string;
+  monitoring_goals?: string | string[];
   credit_package?: {
     credits: number;
     price: number;
   };
-  company_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -98,15 +101,19 @@ Deno.serve(async (req: Request) => {
 
     if (requestData.action === 'subscribe') {
       const TIER_PRICES = {
-        basic: { monthly: 59, yearly: 600 },
-        premium: { monthly: 99, yearly: 1000 },
-        enterprise: { monthly: 199, yearly: 2000 },
+        basic: 59,
+        premium: 99,
+        enterprise: 199,
+      };
+
+      const TIER_PRODUCT_IDS = {
+        basic: 'prod_TqxKX5neHjRYiu',
+        premium: 'prod_TqxLzaw1hDuXLo',
+        enterprise: 'prod_U7pGAo3uBjGCkb',
       };
 
       const tier = requestData.tier || "basic";
-      const tierConfig = TIER_PRICES[tier];
-      const isYearly = requestData.billing_period === "yearly";
-      const price = isYearly ? tierConfig.yearly : tierConfig.monthly;
+      const price = TIER_PRICES[tier];
 
       const TIER_FEATURES = {
         basic: "100 manual scan credits/month, weekly updates, priority support",
@@ -120,12 +127,9 @@ Deno.serve(async (req: Request) => {
           {
             price_data: {
               currency: "usd",
-              product_data: {
-                name: `${tier.charAt(0).toUpperCase()}${tier.slice(1)} Plan`,
-                description: TIER_FEATURES[tier],
-              },
+              product: TIER_PRODUCT_IDS[tier],
               unit_amount: price * 100,
-              recurring: { interval: isYearly ? "year" : "month" },
+              recurring: { interval: "month" },
             },
           },
         ],
@@ -134,22 +138,48 @@ Deno.serve(async (req: Request) => {
           company_id: requestData.company_id || "",
           type: "subscription",
           tier: tier,
-          billing_period: requestData.billing_period || "monthly",
+          billing_period: "monthly",
+          company_name: requestData.company_name || "",
+          industry: requestData.industry || "",
+          description: requestData.description || "",
+          monitoring_goals: Array.isArray(requestData.monitoring_goals)
+            ? requestData.monitoring_goals.join(', ')
+            : requestData.monitoring_goals || ""
         },
       });
 
-      const { error: updateError } = await supabase
+      // Update profiles
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           stripe_customer_id: customer.id,
           stripe_subscription_id: subscription.id,
           subscription_tier: tier,
           subscription_status: 'active',
+          manual_scan_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
         })
         .eq('id', requestData.profile_id);
 
-      if (updateError) {
-        console.error('Error updating profile:', updateError);
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+      }
+
+      // Upsert into watchdog_subscribers
+      const { error: subError } = await supabase
+        .from('watchdog_subscribers')
+        .upsert({
+          profile_id: requestData.profile_id,
+          tier: tier,
+          status: 'active',
+          stripe_customer_id: customer.id,
+          stripe_subscription_id: subscription.id,
+          monthly_price: price,
+          included_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
+          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        }, { onConflict: 'profile_id' });
+
+      if (subError) {
+        console.error('Error updating watchdog_subscribers:', subError);
       }
 
       return new Response(

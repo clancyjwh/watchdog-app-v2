@@ -95,7 +95,6 @@ export default function Onboarding() {
   const [keywordInput, setKeywordInput] = useState('');
   const [resultsPerScan, setResultsPerScan] = useState(5);
   const [requestingMoreSources, setRequestingMoreSources] = useState(false);
-  const [showAnnual, setShowAnnual] = useState(false);
 
   useEffect(() => {
     completeSignup();
@@ -231,9 +230,7 @@ export default function Onboarding() {
   const calculatePricing = () => {
     const tierConfig = getTierConfig(selectedTier);
     const monthly = tierConfig.monthlyPrice;
-    const annual = monthly * 12 * 0.85;
-
-    return { monthly, annual };
+    return { monthly };
   };
 
   const handleNext = async () => {
@@ -391,7 +388,6 @@ export default function Onboarding() {
         first_update_date: today.toISOString().split('T')[0],
         next_scan_due_date: nextScanDate.toISOString(), // Set next scan for 7 days later
         monthly_price: tierConfig.monthlyPrice,
-        annual_price: tierConfig.monthlyPrice * 12 * 0.85,
         subscription_tier: selectedTier,
         subscription_status: 'active',
         stripe_product_id: (tierConfig as any).productId,
@@ -707,7 +703,7 @@ export default function Onboarding() {
             profile_id: profile.id,
             user_email: user.email,
             tier: selectedTier,
-            billing_period: showAnnual ? 'yearly' : 'monthly',
+            billing_period: 'monthly',
           }),
         }
       );
@@ -1377,7 +1373,7 @@ export default function Onboarding() {
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-2">Monitoring Plan</h3>
                     <p className="text-sm text-gray-600">{getTierConfig(selectedTier).name} Plan</p>
-                    <p className="text-sm text-gray-600">${showAnnual ? pricing.annual.toFixed(0) : pricing.monthly.toFixed(0)}/{showAnnual ? 'year' : 'month'}</p>
+                    <p className="text-sm text-gray-600">${pricing.monthly.toFixed(0)}/month</p>
                     <p className="text-sm text-gray-600 mt-1">Manual scan credits included: {getTierConfig(selectedTier).monthlyCredits}</p>
                   </div>
 
@@ -1458,34 +1454,15 @@ export default function Onboarding() {
                   </div>
 
                   <div className="border-t border-blue-200 pt-4 mb-4">
-                    <button
-                      onClick={() => setShowAnnual(!showAnnual)}
-                      className="flex items-center justify-between w-full text-sm mb-2"
-                    >
-                      <span className="text-gray-600">Billing</span>
-                      <span className="text-blue-600 font-medium">
-                        {showAnnual ? 'Annual' : 'Monthly'}
-                      </span>
-                    </button>
                     <div className="flex items-baseline justify-between">
                       <span className="text-2xl font-bold text-gray-900">
-                        ${showAnnual ? pricing.annual.toFixed(0) : pricing.monthly.toFixed(0)}
+                        ${pricing.monthly.toFixed(0)}
                       </span>
                       <span className="text-gray-600">
-                        /{showAnnual ? 'year' : 'month'}
+                        /month
                       </span>
                     </div>
-                    {showAnnual && (
-                      <p className="text-xs text-green-600 mt-1">Save 25% with annual billing</p>
-                    )}
                   </div>
-
-                  <button
-                    onClick={() => setShowAnnual(!showAnnual)}
-                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Switch to {showAnnual ? 'monthly' : 'annual'} billing
-                  </button>
                 </div>
               </div>
             </div>
@@ -1520,9 +1497,9 @@ export default function Onboarding() {
                     <StripeCardInput
                       onSuccess={handlePaymentSuccess}
                       onError={handlePaymentError}
-                      buttonText={`Subscribe - ${formatCurrency(showAnnual ? pricing.annual : pricing.monthly)}/${showAnnual ? 'year' : 'month'}`}
-                      amount={showAnnual ? pricing.annual : pricing.monthly}
-                      description={`You'll be charged ${formatCurrency(showAnnual ? pricing.annual : pricing.monthly)} ${showAnnual ? 'annually' : 'monthly'}. Cancel anytime.`}
+                      buttonText={`Subscribe - ${formatCurrency(pricing.monthly)}/month`}
+                      amount={pricing.monthly}
+                      description={`You'll be charged ${formatCurrency(pricing.monthly)} monthly. Cancel anytime.`}
                     />
                   </Elements>
                 </div>
@@ -1553,34 +1530,15 @@ export default function Onboarding() {
                   </div>
 
                   <div className="border-t border-blue-200 pt-4 mb-4">
-                    <button
-                      onClick={() => setShowAnnual(!showAnnual)}
-                      className="flex items-center justify-between w-full text-sm mb-2"
-                    >
-                      <span className="text-gray-600">Billing</span>
-                      <span className="text-blue-600 font-medium">
-                        {showAnnual ? 'Annual' : 'Monthly'}
-                      </span>
-                    </button>
                     <div className="flex items-baseline justify-between">
                       <span className="text-2xl font-bold text-gray-900">
-                        ${showAnnual ? pricing.annual.toFixed(0) : pricing.monthly.toFixed(0)}
+                        ${pricing.monthly.toFixed(0)}
                       </span>
                       <span className="text-gray-600">
-                        /{showAnnual ? 'year' : 'month'}
+                        /month
                       </span>
                     </div>
-                    {showAnnual && (
-                      <p className="text-xs text-green-600 mt-1">Save 25% with annual billing</p>
-                    )}
                   </div>
-
-                  <button
-                    onClick={() => setShowAnnual(!showAnnual)}
-                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Switch to {showAnnual ? 'monthly' : 'annual'} billing
-                  </button>
                 </div>
               </div>
             </div>

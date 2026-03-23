@@ -74,7 +74,7 @@ export default function LandingPage() {
     },
     {
       name: 'Enterprise',
-      price: 149,
+      price: 199,
       frequency: 'month',
       credits: 600,
       scans: 24,
@@ -254,10 +254,6 @@ export default function LandingPage() {
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               Choose the update frequency that works for you. All plans include unlimited sources and AI filtering.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-              <Zap className="w-4 h-4" />
-              Save 25% with annual billing
-            </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">

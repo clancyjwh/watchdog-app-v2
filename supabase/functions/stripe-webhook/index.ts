@@ -15,10 +15,9 @@ const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPAB
 
 // Map Stripe price IDs to subscription tiers
 const PRICE_TO_TIER: Record<string, string> = {
-  // Add your Stripe price IDs here when available
-  // 'price_xxxxxxxxxxxxx': 'basic',
-  // 'price_yyyyyyyyyyyyy': 'premium',
-  // 'price_zzzzzzzzzzzzz': 'enterprise',
+  'prod_TqxKX5neHjRYiu': 'basic',
+  'prod_TqxLzaw1hDuXLo': 'premium',
+  'prod_U7pGAo3uBjGCkb': 'enterprise',
 };
 
 function getTierFromPriceId(priceId: string): string {
@@ -35,6 +34,10 @@ async function notifySignupWebhook(data: {
   amount_paid?: number;
   currency?: string;
   period_end?: number;
+  company_name?: string;
+  industry?: string;
+  description?: string;
+  monitoring_goals?: string;
 }) {
   try {
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-signup-webhook`;
@@ -132,7 +135,8 @@ async function handleEvent(event: Stripe.Event) {
 
     if (isSubscription) {
       console.info(`Starting subscription sync for customer: ${customerId}`);
-      await syncCustomerFromStripe(customerId);
+      const metadata = (stripeData as any).metadata || {};
+      await syncCustomerFromStripe(customerId, metadata);
     } else if (mode === 'payment' && payment_status === 'paid') {
       try {
         // Get user info from stripe_customers table
@@ -194,7 +198,7 @@ async function handleEvent(event: Stripe.Event) {
 }
 
 // based on the excellent https://github.com/t3dotgg/stripe-recommendations
-async function syncCustomerFromStripe(customerId: string) {
+async function syncCustomerFromStripe(customerId: string, metadata: any = {}) {
   try {
     // Get user info from stripe_customers table
     const { data: customerData } = await supabase
@@ -250,13 +254,15 @@ async function syncCustomerFromStripe(customerId: string) {
 
     // assumes that a customer can only have a single subscription
     const subscription = subscriptions.data[0];
+    const priceId = subscription.items.data[0].price.id;
+    const productId = subscription.items.data[0].price.product as string;
 
     // store subscription state
     const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
       {
         customer_id: customerId,
         subscription_id: subscription.id,
-        price_id: subscription.items.data[0].price.id,
+        price_id: priceId,
         current_period_start: subscription.current_period_start,
         current_period_end: subscription.current_period_end,
         cancel_at_period_end: subscription.cancel_at_period_end,
@@ -283,7 +289,9 @@ async function syncCustomerFromStripe(customerId: string) {
 
     // Notify webhook about successful subscription with all details
     if (userName && userEmail && subscription) {
-      const planTier = getTierFromPriceId(subscription.items.data[0].price.id);
+      const productId = subscription.items.data[0].price.product as string;
+      const planTier = getTierFromPriceId(productId) || getTierFromPriceId(subscription.items.data[0].price.id);
+      
       await notifySignupWebhook({
         full_name: userName,
         email: userEmail,
@@ -294,6 +302,10 @@ async function syncCustomerFromStripe(customerId: string) {
         amount_paid: subscription.items.data[0].price.unit_amount ? subscription.items.data[0].price.unit_amount / 100 : 0,
         currency: subscription.currency,
         period_end: subscription.current_period_end,
+        company_name: metadata.company_name,
+        industry: metadata.industry,
+        description: metadata.description,
+        monitoring_goals: metadata.monitoring_goals
       });
     }
   } catch (error) {
