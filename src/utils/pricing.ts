@@ -24,11 +24,12 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     monthlyCredits: 100,
     productId: 'prod_TqxKX5neHjRYiu',
     features: [
+      '3-day free trial included',
+      'Monitor up to 3 sources',
       '100 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
-      'All core platform features enabled',
     ],
   },
   premium: {
@@ -38,12 +39,13 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     monthlyCredits: 300,
     productId: 'prod_TqxLzaw1hDuXLo',
     features: [
+      '3-day free trial included',
+      'Monitor up to 5 sources',
       '300 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
       'Advanced analytics',
-      'All core platform features enabled',
     ],
   },
   enterprise: {
@@ -53,13 +55,14 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     monthlyCredits: 600,
     productId: 'prod_U7pGAo3uBjGCkb',
     features: [
+      '3-day free trial included',
+      'Monitor up to 10 sources',
       '600 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
       'Advanced analytics',
       'Email delivery (Slack & Teams coming soon)',
-      'All core platform features enabled',
     ],
   },
 };

@@ -46,6 +46,7 @@ export default function LandingPage() {
       sources: 3,
       tier: 'basic',
       features: [
+        '3-day free trial included',
         'Up to 3 monitored sources',
         '100 manual scan credits/month',
         'AI relevance scoring',
@@ -63,6 +64,7 @@ export default function LandingPage() {
       sources: 5,
       tier: 'premium',
       features: [
+        '3-day free trial included',
         'Up to 5 monitored sources',
         '300 manual scan credits/month',
         'AI relevance scoring',
@@ -81,6 +83,7 @@ export default function LandingPage() {
       sources: 10,
       tier: 'enterprise',
       features: [
+        '3-day free trial included',
         'Up to 10 monitored sources',
         '600 manual scan credits/month',
         'AI relevance scoring',
@@ -252,7 +255,7 @@ export default function LandingPage() {
               Simple, transparent pricing
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Choose the update frequency that works for you. All plans include unlimited sources and AI filtering.
+              Choose the update frequency that works for you. All plans include a 3-day free trial.
             </p>
           </div>
 

@@ -116,13 +116,14 @@ Deno.serve(async (req: Request) => {
       const price = TIER_PRICES[tier];
 
       const TIER_FEATURES = {
-        basic: "100 manual scan credits/month, weekly updates, priority support",
-        premium: "300 manual scan credits/month, daily updates, AI insights",
-        enterprise: "600 manual scan credits/month, real-time updates, API access",
+        'basic': '3 sources, 100 manual scan credits/month, 3-day free trial',
+        'premium': '5 sources, 300 manual scan credits/month, 3-day free trial, advanced analytics',
+        'enterprise': '10 sources, 600 manual scan credits/month, 3-day free trial, email/slack integration',
       };
 
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
+        trial_period_days: 3,
         items: [
           {
             price_data: {
