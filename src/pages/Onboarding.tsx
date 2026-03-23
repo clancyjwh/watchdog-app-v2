@@ -748,7 +748,7 @@ export default function Onboarding() {
 
   const pricing = calculatePricing();
 
-  if (authLoading || !profile || !user) {
+  if ((authLoading && !profile) || (!authLoading && (!profile || !user))) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

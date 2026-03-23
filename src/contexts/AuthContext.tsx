@@ -62,13 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, silent = false) => {
     if (fetchingProfile.current) {
       return;
     }
 
     fetchingProfile.current = true;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [profileRes, companiesRes, userRes] = await Promise.all([
         supabase
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.id);
+      await fetchProfile(user.id, true);
     }
   };
 
