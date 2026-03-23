@@ -285,6 +285,29 @@ async function syncCustomerFromStripe(customerId: string, metadata: any = {}) {
       console.error('Error syncing subscription:', subError);
       throw new Error('Failed to sync subscription in database');
     }
+
+    // Update the profiles table and watchdog_subscribers table for consistent state
+    if (customerData?.user_id) {
+        const tier = getTierFromPriceId(productId) || getTierFromPriceId(priceId);
+        
+        await supabase.from('profiles').update({
+            subscription_status: subscription.status,
+            subscription_tier: tier,
+            manual_scan_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
+        }).eq('user_id', customerData.user_id);
+
+        await supabase.from('watchdog_subscribers').upsert({
+            profile_id: metadata.profile_id || customerData.user_id, // fallback to user_id if metadata is missing
+            tier: tier,
+            status: subscription.status,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscription.id,
+            monthly_price: subscription.items.data[0].price.unit_amount ? subscription.items.data[0].price.unit_amount / 100 : 0,
+            included_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        }, { onConflict: 'profile_id' });
+    }
+
     console.info(`Successfully synced subscription for customer: ${customerId}`);
 
     // Notify webhook about successful subscription with all details
