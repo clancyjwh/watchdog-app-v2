@@ -258,7 +258,7 @@ export default function Onboarding() {
             location_country: locationCountry,
             location_province: locationProvince,
             location_city: locationCity,
-            business_context: businessContext,
+            business_context: businessContext.join(', '),
           })
           .eq('id', companyId);
 
@@ -279,7 +279,7 @@ export default function Onboarding() {
             location_country: locationCountry,
             location_province: locationProvince,
             location_city: locationCity,
-            business_context: businessContext,
+            business_context: businessContext.join(', '),
           })
           .select()
           .single();
@@ -296,8 +296,6 @@ export default function Onboarding() {
         .from('profiles')
         .update({
           company_name: companyName,
-          business_description: businessDescription,
-          industry: industry,
           current_company_id: companyId,
         })
         .eq('id', profile.id);
@@ -412,13 +410,22 @@ export default function Onboarding() {
       if (creditsError) console.warn('Failed to set initial credits:', creditsError);
 
       // Update profile with default values
+      // Update company with final settings
+      const { error: companyUpdateError } = await supabase
+        .from('companies')
+        .update({
+          content_types: selectedContentTypes,
+          analysis_depth: 'standard',
+          results_per_scan: 5,
+        })
+        .eq('id', currentCompany.id);
+      
+      if (companyUpdateError) throw new Error(`Failed to update company: ${companyUpdateError.message}`);
+
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           onboarding_completed: true,
-          content_types: selectedContentTypes,
-          analysis_depth: 'standard',
-          results_per_scan: 5,
         })
         .eq('id', profile.id);
       if (profileError) throw new Error(`Failed to update profile: ${profileError.message}`);
