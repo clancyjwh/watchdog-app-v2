@@ -167,10 +167,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .insert({
           user_id: data.user.id,
-          company_name: companyName,
-          email: email,
           full_name: fullName,
+          email: email,
+          company_name: companyName,
           onboarding_completed: false,
+          subscription_tier: 'basic',
+          subscription_status: 'inactive',
+          manual_scan_credits: 0
         })
         .select()
         .single();

@@ -46,14 +46,11 @@ export type Profile = {
   full_name: string;
   email: string;
   company_name: string;
-  business_description: string;
-  industry: string;
   onboarding_completed: boolean;
-  content_types: string[];
-  current_company_id: string | null;
+  subscription_tier: string;
+  subscription_status: string;
   manual_scan_credits: number;
-  subscription_tier?: string;
-  subscription_status?: string;
+  current_company_id: string | null;
   created_at: string;
   updated_at: string;
 };
