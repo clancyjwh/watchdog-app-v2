@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import {
   Heart, Zap, Info, ExternalLink, Activity, 
   Layers, Clock, TrendingUp, Search,
-  ShieldCheck, Sparkles, ChevronRight, Newspaper, Globe
+  ShieldCheck, Sparkles, ChevronRight, Newspaper, Globe,
+  Share2
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import RelevanceModal from '../components/RelevanceModal';
@@ -26,7 +27,7 @@ interface UnifiedArticle {
 }
 
 export default function Favorites() {
-  const { profile, currentCompany, authLoading } = useAuth();
+  const { profile, currentCompany, loading: authLoading } = useAuth();
   const [articles, setArticles] = useState<UnifiedArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<UnifiedArticle | null>(null);

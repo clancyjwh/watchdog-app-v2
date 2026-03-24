@@ -1,10 +1,67 @@
 /**
- * Generates suggested topics via Make.com webhook
+ * Environment variables for xAI/OpenAI
  */
+const XAI_API_KEY = import.meta.env.VITE_XAI_API_KEY || import.meta.env.VITE_OPENAI_API_KEY || '';
+const XAI_API_URL = import.meta.env.VITE_XAI_API_URL || 'https://api.x.ai/v1/chat/completions';
+
 export type TopicSuggestion = {
   topic: string;
   why: string;
   priority?: number;
+};
+
+/**
+ * Static fallback for topic suggestions when AI is unavailable
+ */
+export const getTopicSuggestions = (businessDescription: string, industry: string): string[] => {
+  const lowerDesc = businessDescription.toLowerCase();
+  const lowerIndustry = industry.toLowerCase();
+
+  if (lowerDesc.includes('property') || lowerDesc.includes('real estate') || lowerIndustry.includes('real estate')) {
+    return [
+      'BC Rental Regulations', 'Tenant Rights Updates', 'Property Tax Changes', 'Local Real Estate Market',
+      'Housing Policy', 'Eviction Laws', 'Maintenance Standards', 'Strata Regulations',
+      'Landlord Insurance Updates', 'Building Code Changes', 'Rental Market Trends', 'Property Investment News'
+    ];
+  }
+
+  if (lowerDesc.includes('law') || lowerDesc.includes('legal') || lowerIndustry.includes('legal')) {
+    return [
+      'Legal Precedents', 'Regulatory Changes', 'Court Rulings', 'Industry News',
+      'Professional Development', 'Law Society Updates', 'Case Law Analysis', 'Legislative Changes',
+      'Legal Technology', 'Ethics Guidelines', 'Practice Management', 'Client Rights'
+    ];
+  }
+
+  if (lowerDesc.includes('tech') || lowerDesc.includes('software') || lowerIndustry.includes('technology')) {
+    return [
+      'AI & Machine Learning', 'Cybersecurity Updates', 'Software Development Trends', 'Cloud Computing News',
+      'Data Privacy Regulations', 'Tech Industry News', 'DevOps Best Practices', 'Open Source Updates',
+      'Product Launches', 'Technology Regulations', 'Developer Tools', 'Industry Standards'
+    ];
+  }
+
+  if (lowerDesc.includes('health') || lowerDesc.includes('medical') || lowerIndustry.includes('healthcare')) {
+    return [
+      'Healthcare Regulations', 'Medical Research', 'Patient Care Standards', 'Health Insurance Updates',
+      'Medical Technology', 'Public Health Policies', 'Drug Approvals', 'Clinical Guidelines',
+      'Healthcare Funding', 'Medical Device News', 'Telemedicine Updates', 'Health Data Privacy'
+    ];
+  }
+
+  if (lowerDesc.includes('finance') || lowerDesc.includes('banking') || lowerIndustry.includes('financial')) {
+    return [
+      'Financial Regulations', 'Market Trends', 'Banking Updates', 'Investment News',
+      'Cryptocurrency', 'Tax Law Changes', 'Interest Rate Updates', 'Economic Indicators',
+      'Compliance Requirements', 'Fintech Innovation', 'Securities Regulations', 'Risk Management'
+    ];
+  }
+
+  return [
+    'Industry News', 'Regulatory Changes', 'Market Trends', 'Competitor Activity',
+    'Technology Updates', 'Economic Indicators', 'Policy Changes', 'Consumer Trends',
+    'Innovation & Research', 'Professional Development', 'Best Practices', 'Emerging Opportunities'
+  ];
 };
 
 /**
@@ -74,6 +131,11 @@ export type CompetitorUrls = {
 };
 
 async function callXAI(prompt: string, temperature: number = 0.3): Promise<string> {
+  if (!XAI_API_KEY) {
+    console.warn('XAI_API_KEY is not defined. AI features will be limited.');
+    return '';
+  }
+
   try {
     const response = await fetch(XAI_API_URL, {
       method: 'POST',

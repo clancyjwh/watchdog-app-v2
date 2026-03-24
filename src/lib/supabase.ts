@@ -154,15 +154,21 @@ export type SourcePerformance = {
 export type ScanSummary = {
   id: string;
   profile_id: string;
+  company_id?: string;
   content_type: string;
   overview: string | null;
   summary_text: string;
   key_insights: string[];
+  relevance_score?: number;
+  relevance_reasoning?: string;
   citations: Array<{
     number: number;
     title: string;
     url: string;
     source: string;
+    relevance_score?: number;
+    relevance_reasoning?: string;
+    summary?: string;
   }>;
   article_count: number;
   social_sentiment: string | null;

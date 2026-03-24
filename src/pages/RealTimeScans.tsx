@@ -92,10 +92,10 @@ export default function RealTimeScans() {
         body: JSON.stringify({
           topics,
           sources: sources.map(s => ({ name: s.name, url: s.url })),
-          contentTypes: profile.content_types || ['news', 'legislation'],
-          businessDescription: profile.business_description || '',
-          industry: profile.industry || '',
-          monitoringGoals: profile.monitoring_goals || '',
+          contentTypes: currentCompany?.content_types || ['news', 'legislation'],
+          businessDescription: currentCompany?.description || '',
+          industry: currentCompany?.industry || '',
+          monitoringGoals: currentCompany?.monitoring_goals || '',
           dateFrom,
           dateTo: today
         }),
@@ -254,7 +254,7 @@ export default function RealTimeScans() {
                                             {cit.summary}
                                          </p>
                                          <div className="flex items-center gap-3 mt-4">
-                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Source: {new URL(cit.url).hostname.replace('www.', '')}</span>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Source: {cit.url ? new URL(cit.url).hostname.replace('www.', '') : 'Internal'}</span>
                                             <a 
                                               href={cit.url} 
                                               target="_blank" 
