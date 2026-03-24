@@ -83,4 +83,60 @@
   .news-card-hover {
     @apply hover:shadow-sm transition-shadow;
   }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-card-dark {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .techny-border {
+    position: relative;
+    border: 1px solid theme('colors.slate.200');
+  }
+
+  .techny-border::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    right: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, theme('colors.indigo.500'), theme('colors.purple.500'));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .techny-border:hover::before {
+    opacity: 1;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: theme('colors.slate.200');
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.slate.300');
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 15px theme('colors.indigo.500/20');
+  }
 }

@@ -1,11 +1,20 @@
 /**
  * Generates suggested topics via Make.com webhook
  */
+export type TopicSuggestion = {
+  topic: string;
+  why: string;
+  priority?: number;
+};
+
+/**
+ * Generates suggested topics via Make.com webhook
+ */
 export async function generateTopicSuggestions(
   businessDescription: string,
   industry: string,
   businessContext: string[] = []
-): Promise<string[]> {
+): Promise<TopicSuggestion[]> {
   const WEBHOOK_URL = 'https://hook.us2.make.com/f9mivoeldx87b02ty2xbqtk81jxb36km';
 
   try {
@@ -30,12 +39,16 @@ export async function generateTopicSuggestions(
     
     // Support the format: { "suggestedTopics": [ { "topic": "...", "why": "...", ... } ] }
     if (data.suggestedTopics && Array.isArray(data.suggestedTopics)) {
-      return data.suggestedTopics.map((item: any) => item.topic);
+      return data.suggestedTopics.map((item: any) => ({
+        topic: item.topic,
+        why: item.why || '',
+        priority: item.priority
+      }));
     }
 
     // Fallback for simple array format
     if (Array.isArray(data)) {
-      return data;
+      return data.map(topic => (typeof topic === 'string' ? { topic, why: '' } : topic));
     }
 
     return [];

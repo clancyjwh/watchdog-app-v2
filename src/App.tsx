@@ -13,6 +13,7 @@ import SingleUpdate from './pages/SingleUpdate';
 import TrackedSources from './pages/TrackedSources';
 import RealTimeScans from './pages/RealTimeScans';
 import Archive from './pages/Archive';
+import Favorites from './pages/Favorites';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing';
 import Admin from './pages/Admin';
@@ -88,6 +89,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Archive />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/favorites"
+            element={
+              <ProtectedRoute>
+                <Favorites />
               </ProtectedRoute>
             }
           />

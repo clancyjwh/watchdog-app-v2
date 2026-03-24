@@ -8,7 +8,8 @@ interface AuthContextType {
   profile: Profile | null;
   currentCompany: Company | null;
   companies: Company[];
-  loading: boolean;
+  isAdmin: boolean;
+  effectiveCredits: number;
   signUp: (email: string, password: string, fullName: string, companyName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; profile: Profile | null }>;
   signOut: () => Promise<void>;
@@ -276,22 +277,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isSigningUp.current = false;
   };
 
-  return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      profile,
-      currentCompany,
-      companies,
-      loading,
-      signUp,
-      signIn,
-      signOut,
-      refreshProfile,
-      switchCompany,
-      addCompany,
-      completeSignup
-    }}>
+    const isAdmin = user?.email === 'clancyjhodgins@gmail.com';
+    const effectiveCredits = isAdmin ? 999999 : (profile?.manual_scan_credits || 0);
+
+    return (
+      <AuthContext.Provider value={{
+        user,
+        session,
+        profile,
+        currentCompany,
+        companies,
+        loading,
+        isAdmin,
+        effectiveCredits,
+        signUp,
+        signIn,
+        signOut,
+        refreshProfile,
+        switchCompany,
+        addCompany,
+        completeSignup
+      }}>
       {children}
     </AuthContext.Provider>
   );
