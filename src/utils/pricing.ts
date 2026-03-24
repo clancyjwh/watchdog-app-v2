@@ -140,7 +140,7 @@ export function getDeliveryMethodLabel(method: 'dashboard' | 'email' | 'slack'):
 }
 
 export function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString('en-US')}`;
+  return `$${amount.toLocaleString('en-US')} CAD`;
 }
 
 export function getNextDeliveryDate(

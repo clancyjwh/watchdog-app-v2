@@ -77,7 +77,7 @@ export type Source = {
 export type Subscription = {
   id: string;
   profile_id: string;
-  frequency: 'monthly' | 'weekly' | 'daily';
+  frequency: 'monthly' | 'biweekly' | 'weekly' | 'daily';
   delivery_method: 'dashboard' | 'email' | 'slack';
   relevance_threshold: number;
   monthly_price: number;

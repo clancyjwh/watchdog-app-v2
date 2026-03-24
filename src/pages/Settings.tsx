@@ -45,7 +45,7 @@ type Source = {
 
 type Subscription = {
   id: string;
-  frequency: 'monthly' | 'biweekly' | 'weekly';
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly';
   monthly_price: number;
 };
 
@@ -68,7 +68,7 @@ export default function SettingsPage() {
   const [newTopic, setNewTopic] = useState('');
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
 
-  const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly'>('biweekly');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly'>('biweekly');
   const [resultsPerScan, setResultsPerScan] = useState(10);
   const [analysisDepth, setAnalysisDepth] = useState<'standard' | 'deep'>('standard');
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -122,12 +122,19 @@ export default function SettingsPage() {
   const handleGetTopicSuggestions = async () => {
     setAiLoading(true);
     try {
-      const suggestions = await generateTopicSuggestions(businessDescription, industry, []);
-      if (suggestions && suggestions.length > 0) {
+      let suggestions = await generateTopicSuggestions(businessDescription, industry, []);
+      
+      // Fallback if AI/Webhook returns nothing
+      if (!suggestions || suggestions.length === 0) {
+        const fallbackTopics = await import('../utils/openai').then(m => m.getTopicSuggestions(businessDescription, industry));
+        setTopicSuggestions(fallbackTopics);
+      } else {
         setTopicSuggestions(suggestions.map(s => s.topic));
       }
     } catch (error) {
       console.error('Error getting topic suggestions:', error);
+      // Even deeper fallback
+      setTopicSuggestions(['Industry News', 'Regulatory Changes', 'Market Trends', 'Competitor Activity']);
     } finally {
       setAiLoading(false);
     }
@@ -195,25 +202,21 @@ export default function SettingsPage() {
         .eq('id', profile.id);
 
       // 3. Update Sync/Subscription
+      // 3. Update Sync/Subscription (Using upsert to avoid 400/404)
       const pricing = getCurrentPricing();
-      if (subscription) {
-        await supabase
-          .from('subscriptions')
-          .update({
-            frequency,
-            monthly_price: pricing.monthlyTotal,
-          })
-          .eq('id', subscription.id);
-      } else {
-        await supabase
-          .from('subscriptions')
-          .insert({
-            profile_id: profile.id,
-            frequency,
-            delivery_method: 'dashboard',
-            monthly_price: pricing.monthlyTotal,
-          });
-      }
+      const { error: subError } = await supabase
+        .from('subscriptions')
+        .upsert({
+          profile_id: profile.id,
+          frequency,
+          delivery_method: 'dashboard',
+          monthly_price: pricing.monthlyTotal,
+          updated_at: new Date().toISOString(),
+        }, { 
+          onConflict: 'profile_id' 
+        });
+
+      if (subError) throw subError;
 
       // 4. Webhook Sync
       await syncSettingsToWebhook({
@@ -264,17 +267,17 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
               <Settings className="w-6 h-6 text-indigo-600" />
-              Intelligence Control
+              Settings
             </h1>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              Configure your enterprise monitoring network and entities
+              Your company profile and monitoring settings
             </p>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-xl border border-indigo-100">
               <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">System Sync: Active</span>
+              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Settings Saved</span>
             </div>
             
             <button
@@ -283,7 +286,7 @@ export default function SettingsPage() {
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-black shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 disabled:opacity-50"
             >
               {saving ? <Activity className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              {saving ? 'Synchronizing...' : 'Save Configuration'}
+              {saving ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
         </header>
@@ -297,16 +300,16 @@ export default function SettingsPage() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-indigo-600" />
-                    Active Entities
+                    Your Companies
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Manage corporate profiles and subsidiaries</p>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Manage your registered companies</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <CompanySwitcher />
                   <button
                     onClick={() => navigate('/onboarding')}
                     className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"
-                    title="Register New Entity"
+                    title="Add New Company"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -333,7 +336,7 @@ export default function SettingsPage() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{company.industry}</p>
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase">Live Node</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase">Monitoring Active</span>
                     </div>
                   </button>
                 ))}
@@ -344,14 +347,14 @@ export default function SettingsPage() {
                 <div className="mb-6 pb-6 border-b border-slate-100 flex items-center justify-between">
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                     <Activity className="w-4 h-4 text-indigo-500" />
-                    Entity Profile: {currentCompany?.name}
+                    Company Profile: {currentCompany?.name}
                   </h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Legal Name</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Company Name</label>
                       <input
                         type="text"
                         value={companyName}
@@ -360,7 +363,7 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Market Sector</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Industry</label>
                       <input
                         type="text"
                         value={industry}
@@ -370,7 +373,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Operational Summary</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">About Your Company</label>
                     <textarea
                       value={businessDescription}
                       onChange={(e: React.ChangeEvent<any>) => setBusinessDescription(e.target.value)}
@@ -381,7 +384,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="mt-8 pt-8 border-t border-slate-100">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 block">Regional Context</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 block">Geographic Focus</label>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <input
                       type="text"
@@ -415,9 +418,9 @@ export default function SettingsPage() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                     <Layers className="w-5 h-5 text-indigo-600" />
-                    Intelligence Channels
+                    Topics to Monitor
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Direct the focus of your AI monitoring engine</p>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Select the topics you want us to monitor</p>
                 </div>
 
                 <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-8">
@@ -429,7 +432,7 @@ export default function SettingsPage() {
                         onChange={(e) => setNewTopic(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleAddTopic()}
                         className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold focus:border-indigo-500 transition-all outline-none text-sm"
-                        placeholder="Define monitoring vector..."
+                        placeholder="e.g. AI in Healthcare..."
                       />
                       <button
                         onClick={handleAddTopic}
@@ -460,13 +463,13 @@ export default function SettingsPage() {
                   {/* AI Recommendations */}
                   <div className="pt-8 border-t border-slate-50">
                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Personalized Suggestions</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">AI Suggested Topics</span>
                         <button 
                           onClick={handleGetTopicSuggestions}
                           disabled={aiLoading}
                           className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 hover:underline disabled:opacity-50"
                         >
-                          {aiLoading ? 'Analyzing...' : <><Sparkles className="w-3 h-3" /> Refresh AI Predictions</>}
+                          {aiLoading ? 'Analyzing...' : <><Sparkles className="w-3 h-3" /> Refresh Topics</>}
                         </button>
                      </div>
                      <div className="flex flex-wrap gap-2">
@@ -489,9 +492,9 @@ export default function SettingsPage() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-indigo-600 fill-indigo-600" />
-                    Compute Tier
+                    Your Plan
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Resource allocation & network frequency</p>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Review your current plan and monitoring frequency</p>
                 </div>
 
                 <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
@@ -499,29 +502,29 @@ export default function SettingsPage() {
                    <div className="relative z-10 text-left">
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full mb-6">
                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-200">Active Node</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-200">{profile?.subscription_tier === 'premium' ? 'Premium Plan' : profile?.subscription_tier === 'enterprise' ? 'Enterprise Plan' : 'Basic Plan'}</p>
                     </div>
 
                     <div className="flex items-baseline gap-1 mb-10">
                       <span className="text-5xl font-black">${pricing.monthlyTotal}</span>
-                      <span className="text-slate-400 font-bold text-base">/mo</span>
+                      <span className="text-slate-400 font-bold text-base">/mo CAD</span>
                     </div>
 
                     <div className="space-y-5 mb-10 border-b border-white/5 pb-10">
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Network Interval</span>
+                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Scan Frequency</span>
                         <select
                           value={frequency}
                           onChange={(e) => setFrequency(e.target.value as any)}
                           className="bg-slate-800 border-none rounded-xl px-3 py-1.5 text-xs font-black text-indigo-300 outline-none cursor-pointer"
                         >
-                          <option value="monthly">Monthly</option>
-                          <option value="biweekly">Bi-Weekly</option>
+                          <option value="daily">Daily</option>
                           <option value="weekly">Weekly</option>
+                          <option value="biweekly">Bi-Weekly</option>
                         </select>
                       </div>
                       <div className="flex justify-between items-center">
-                         <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Intelligence Depth</span>
+                         <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Results per Scan</span>
                          <input
                           type="number"
                           value={resultsPerScan}
@@ -530,7 +533,7 @@ export default function SettingsPage() {
                         />
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Analysis Type</span>
+                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">AI Analysis Level</span>
                         <div className="flex bg-slate-800 p-1 rounded-xl">
                           <button
                             onClick={() => setAnalysisDepth('standard')}
@@ -542,6 +545,21 @@ export default function SettingsPage() {
                           >Deep</button>
                         </div>
                       </div>
+
+                      <div className="pt-6 border-t border-white/5 space-y-3">
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>{resultsPerScan} AI Scans per cycle</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>{analysisDepth === 'deep' ? 'Deep Neural Analysis included' : 'Standard AI Analysis'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>Dashboard & Alerts active</span>
+                        </div>
+                      </div>
                     </div>
 
                     <button
@@ -549,7 +567,7 @@ export default function SettingsPage() {
                       disabled={saving}
                       className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black text-sm hover:bg-slate-100 transition-all shadow-xl active:scale-95 disabled:opacity-50"
                     >
-                      {saving ? 'UPDATING...' : 'SYNC INFRASTRUCTURE'}
+                      {saving ? 'UPDATING...' : 'SAVE SETTINGS'}
                     </button>
                   </div>
                 </div>

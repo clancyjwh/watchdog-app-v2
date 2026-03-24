@@ -88,7 +88,7 @@ export default function Onboarding() {
   const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(['news', 'legislation', 'government']);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('premium');
 
-  const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly'>('biweekly');
+  const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly' | 'daily'>('biweekly');
   const [analysisDepth, setAnalysisDepth] = useState<'standard' | 'deep'>('standard');
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [competitorInput, setCompetitorInput] = useState('');
@@ -684,7 +684,7 @@ export default function Onboarding() {
             />
             <div className="relative flex justify-between">
               {[1, 2, 3, 5, 6, 8].map((step, idx) => {
-                const label = ['Entity', 'Intelligence', 'Investment', 'Network', 'Verification', 'Finalize'][idx];
+                const label = ['Company', 'Topics', 'Plan', 'Summary', 'Review', 'Finish'][idx];
                 const isActive = step === currentStep || (currentStep === 7 && step === 6);
                 const isCompleted = step < currentStep || (currentStep > 4 && step === 3);
 
@@ -729,16 +729,16 @@ export default function Onboarding() {
           {currentStep === 1 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Establish <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Entity</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Company <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Details</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Define your corporate identity to calibrate our neural scanning engines for hyper-relevant intelligence delivery.
+                  Tell us about your company so we can find the most relevant updates for you.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-6">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Corporate Identifier</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Company Name</label>
                     <input
                       type="text"
                       value={companyName}
@@ -749,13 +749,13 @@ export default function Onboarding() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Industry Vertical</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Industry</label>
                     <select
                       value={industry}
                       onChange={(e) => setIndustry(e.target.value)}
                       className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-slate-900 focus:border-indigo-500 transition-all outline-none"
                     >
-                      <option value="">Select Domain</option>
+                      <option value="">Select Industry</option>
                       {INDUSTRY_OPTIONS.map((ind) => (
                         <option key={ind} value={ind}>
                           {ind}
@@ -765,19 +765,19 @@ export default function Onboarding() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Operational Summary</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Company Description</label>
                     <textarea
                       value={businessDescription}
                       onChange={(e) => setBusinessDescription(e.target.value)}
                       rows={5}
                       className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-600 focus:border-indigo-500 transition-all outline-none resize-none leading-relaxed text-sm placeholder:text-slate-300"
-                      placeholder="Describe your core operations and value proposition..."
+                      placeholder="What does your company do?"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-6">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Intelligence Objectives</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">What are you looking for?</label>
                   <div className="grid grid-cols-1 gap-3">
                     {MONITORING_GOALS.slice(0, 6).map((goal) => (
                       <button
@@ -891,9 +891,9 @@ export default function Onboarding() {
           {currentStep === 2 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Neural <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Intelligence</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Monitoring <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Topics</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  {aiLoading ? 'Our algorithms are currently mapping global data vectors to your corporate profile...' : 'Select intelligence vectors or define custom parameters for your neural scan.'}
+                  {aiLoading ? 'Our AI is finding the most relevant sources and topics for your business...' : 'Select the topics you want to monitor or add your own.'}
                 </p>
               </div>
 
@@ -904,7 +904,7 @@ export default function Onboarding() {
                       <Zap className="w-8 h-8 text-white animate-pulse" />
                     </div>
                   </div>
-                  <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">Initializing Neural Map</p>
+                  <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">Finding Relevant Topics</p>
                 </div>
               ) : (
                 <div className="space-y-8">
@@ -947,7 +947,7 @@ export default function Onboarding() {
                           {activeInfoTopic === item.topic && (
                             <div className="absolute z-50 top-full left-0 right-0 mt-4 p-6 bg-slate-900 text-white rounded-[24px] shadow-2xl animate-in fade-in zoom-in-95 border border-white/10 ring-8 ring-indigo-500/5">
                               <div className="flex justify-between items-start mb-4">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Intelligence Justification</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Why we suggest this</span>
                                 {item.priority && (
                                   <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/20 rounded-full border border-indigo-500/30">
                                     <Activity className="w-3.5 h-3.5 text-indigo-400" />
@@ -965,7 +965,7 @@ export default function Onboarding() {
                                    onClick={() => setActiveInfoTopic(null)}
                                    className="w-full py-2.5 text-[10px] font-black text-white uppercase tracking-[0.2em] bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
                                  >
-                                   Close Intelligence Detail
+                                   Close
                                  </button>
                               </div>
                             </div>
@@ -975,18 +975,18 @@ export default function Onboarding() {
                     </div>
                   ) : (
                     <div className="text-center py-20 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
-                      <p className="text-slate-400 font-black mb-6 uppercase tracking-[0.2em] text-[10px]">No Intelligence Profiles Found</p>
+                      <p className="text-slate-400 font-black mb-6 uppercase tracking-[0.2em] text-[10px]">No topics Suggested yet</p>
                       <button
                         onClick={loadTopicSuggestions}
                         className="px-10 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl hover:border-indigo-500 transition-all font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200/50"
                       >
-                        Initiate Neural Re-scan
+                        Refresh Topics
                       </button>
                     </div>
                   )}
 
                   <div className="pt-6 border-t border-slate-100">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 block">Manual Vector Injection</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 block">Add your own topic</label>
                     <div className="flex gap-3">
                       <input
                         type="text"
@@ -1030,9 +1030,9 @@ export default function Onboarding() {
           {currentStep === 3 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Select <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Investment</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Choose <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Your Plan</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Commit resources to activate enterprise-grade scanning clusters and unlock deep intelligence analysis.
+                  Choose a plan to start monitoring your industry and receive deep AI analysis.
                 </p>
               </div>
 
@@ -1049,7 +1049,7 @@ export default function Onboarding() {
                   >
                     {tier.tier === 'premium' && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-200">
-                        Most Active
+                        Most Popular
                       </div>
                     )}
                     <div className="mb-8">
@@ -1090,9 +1090,9 @@ export default function Onboarding() {
                     <Info className="w-6 h-6 text-indigo-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-black text-sm uppercase tracking-widest mb-1">Adaptive Intelligence Scaling</h4>
+                    <h4 className="text-white font-black text-sm uppercase tracking-widest mb-1">Flexible Monitoring</h4>
                     <p className="text-slate-400 text-xs font-bold leading-relaxed">
-                      All plans include neural web scanning. You can adjust frequency and delivery parameters post-setup.
+                      All plans include automated web monitoring. You can adjust your settings anytime after setup.
                     </p>
                   </div>
                 </div>
@@ -1108,9 +1108,9 @@ export default function Onboarding() {
           {currentStep === 5 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Content <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Network</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Source <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Types</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Configure the types of intelligence artifacts our crawlers should prioritize during the deep-web assimilation process.
+                  Select the types of content you want us to monitor across the web for the most relevant updates.
                 </p>
               </div>
 
@@ -1147,7 +1147,7 @@ export default function Onboarding() {
                               </div>
                             )}
                           </div>
-                          <p className="text-[10px] font-bold text-slate-400 leading-tight">Priority Neural Vectoring</p>
+                          <p className="text-[10px] font-bold text-slate-400 leading-tight">Custom monitoring</p>
                         </div>
                       </div>
                     </button>
@@ -1160,30 +1160,30 @@ export default function Onboarding() {
           {currentStep === 6 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Neural <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Verification</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Review <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Your Setup</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Validate your intelligence parameters before initiating the global monitoring synchronization.
+                  Review your business profile and monitoring settings before we start your daily scans.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-8">
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Corporate Blueprint</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Business Profile</h3>
                     <div className="space-y-3">
                        <div className="flex justify-between items-center">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase">Entity</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase">Company</span>
                           <span className="text-sm font-black text-slate-900">{companyName}</span>
                        </div>
                        <div className="flex justify-between items-center">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase">Domain</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase">Industry</span>
                           <span className="text-sm font-black text-slate-900">{industry}</span>
                        </div>
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Active Vectors ({selectedTopics.length})</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Monitored Topics ({selectedTopics.length})</h3>
                     <div className="flex flex-wrap gap-2">
                       {selectedTopics.slice(0, 8).map((topic) => (
                         <span key={topic} className="px-3 py-1.5 bg-slate-100 text-slate-900 rounded-lg text-[10px] font-black uppercase tracking-tight">
@@ -1199,7 +1199,7 @@ export default function Onboarding() {
                   </div>
 
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Intelligence Artifacts</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Content Types</h3>
                     <div className="flex flex-wrap gap-2">
                       {selectedContentTypes.map((typeId) => {
                         const type = CONTENT_TYPES.find((t) => t.id === typeId);
@@ -1224,7 +1224,7 @@ export default function Onboarding() {
                     </div>
                     <h3 className="text-3xl font-black text-white tracking-tight mb-2 uppercase">{getTierConfig(selectedTier).name} Plan</h3>
                     <p className="text-slate-400 font-bold text-xs leading-relaxed max-w-[200px]">
-                       Enterprise-grade intelligence with daily neural scans and unlimited manual vectors.
+                       Proactive monitoring with daily scans and unlimited custom topics.
                     </p>
                   </div>
 
@@ -1237,7 +1237,7 @@ export default function Onboarding() {
                         <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Monthly</span>
                         <div className="text-right">
                            <span className="text-4xl font-black text-white">${pricing.monthly.toFixed(0)}</span>
-                           <span className="text-indigo-400 text-xs font-black ml-1 uppercase">USD</span>
+                           <span className="text-indigo-400 text-xs font-black ml-1 uppercase">CAD</span>
                         </div>
                      </div>
                   </div>
@@ -1249,9 +1249,9 @@ export default function Onboarding() {
           {currentStep === 7 && (
             <div className="space-y-10 flex-1">
               <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Payment <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Authorization</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Secure <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Payment</span></h2>
                 <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Establish a secure financial link to sustain your intelligence pipelines. Enterprise encryption active.
+                  Securely add your payment method to activate your account and start your monitoring pipelines.
                 </p>
               </div>
 
@@ -1259,16 +1259,16 @@ export default function Onboarding() {
                 <div className="bg-slate-50 rounded-[32px] p-8 border-2 border-slate-100">
                   <div className="mb-8 flex items-center gap-3 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
                      <Zap className="w-4 h-4 text-indigo-600" strokeWidth={3} />
-                     <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">3-Day Delta Trial Active</span>
+                     <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">3-Day Free Trial Active</span>
                   </div>
                   
                   <Elements stripe={stripePromise}>
                     <StripeCardInput
                       onSuccess={handlePaymentSuccess}
                       onError={handlePaymentError}
-                      buttonText={`Authorize Node - ${formatCurrency(pricing.monthly)}/month`}
+                      buttonText={`Activate Account - ${formatCurrency(pricing.monthly)}/month`}
                       amount={pricing.monthly}
-                      description={`Secure recurring billing initiated. Cancel anytime.`}
+                      description={`Securely process your subscription. Cancel anytime.`}
                     />
                   </Elements>
                 </div>
@@ -1297,7 +1297,7 @@ export default function Onboarding() {
                           ${pricing.monthly.toFixed(0)}
                         </span>
                         <span className="text-indigo-400 font-black text-xs uppercase tracking-widest">
-                          / NODE MONTH
+                          / MONTH
                         </span>
                       </div>
                     </div>
@@ -1326,15 +1326,15 @@ export default function Onboarding() {
               </div>
 
               <div className="max-w-md">
-                <h2 className="text-5xl font-black text-slate-900 tracking-tight leading-none mb-4 uppercase">System <span className="text-indigo-600">Active</span></h2>
+                <h2 className="text-5xl font-black text-slate-900 tracking-tight leading-none mb-4 uppercase">Setup <span className="text-indigo-600">Complete</span></h2>
                 <p className="text-slate-500 font-bold text-lg leading-relaxed">
-                  Setup sequence complete. Your enterprise monitoring node is ready for deployment.
+                  You're all set! We're starting your first scan now and will notify you of any findings.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                 <div className="p-8 bg-slate-50 rounded-[32px] border-2 border-slate-100 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Neural Vectors</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Topics</span>
                   <span className="text-3xl font-black text-slate-900">{selectedTopics.length}</span>
                 </div>
 
@@ -1350,19 +1350,19 @@ export default function Onboarding() {
               </div>
 
               <div className="w-full max-w-lg p-8 bg-slate-900 rounded-[32px] text-left border border-white/10 shadow-2xl">
-                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">Initial Scan Logic</h4>
+                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">What happens next</h4>
                  <div className="space-y-4">
                     <div className="flex gap-4 items-start">
                        <div className="p-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                           <Zap className="w-3 h-3" />
                        </div>
-                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">System will execute immediate full-spectrum deep-web crawl upon finalization.</p>
+                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">System will start its initial scan immediately.</p>
                     </div>
                     <div className="flex gap-4 items-start">
                        <div className="p-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                           <Zap className="w-3 h-3" />
                        </div>
-                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">Intelligence findings will manifest in the unified dashboard node within 60 seconds.</p>
+                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">Results will appear in your dashboard within 60 seconds.</p>
                     </div>
                  </div>
               </div>
@@ -1396,7 +1396,7 @@ export default function Onboarding() {
             className="flex items-center gap-3 px-8 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-all disabled:opacity-30"
           >
             <ChevronLeft className="w-5 h-5" strokeWidth={3} />
-            Previous Node
+            Previous Step
           </button>
 
           <div className="flex items-center gap-12">
@@ -1413,7 +1413,7 @@ export default function Onboarding() {
                 disabled={loading}
                 className="group flex items-center gap-4 px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all duration-300 disabled:opacity-50"
               >
-                {loading ? 'Committing Changes...' : 'Initiate Platform'}
+                {loading ? 'Starting Platform...' : 'Start WatchDog'}
                 <Zap className="w-5 h-5 group-hover:scale-125 transition-transform" />
               </button>
             ) : currentStep < 7 ? (
@@ -1422,7 +1422,7 @@ export default function Onboarding() {
                 disabled={!canProceed() || loading}
                 className="group flex items-center gap-4 px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all duration-300 disabled:bg-slate-100 disabled:text-slate-300 disabled:shadow-none"
               >
-                {loading ? 'Processing...' : currentStep === 6 ? 'Finalize Verification' : 'Proceed to Next Node'}
+                {loading ? 'Processing...' : currentStep === 6 ? 'Finish Review' : 'Continue'}
                 <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={3} />
               </button>
             ) : null}
