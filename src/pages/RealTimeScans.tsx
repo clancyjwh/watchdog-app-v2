@@ -245,8 +245,17 @@ export default function RealTimeScans() {
                            </div>
 
                            <div className="space-y-4">
-                              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 px-2">Primary Intelligence Sources</h4>
-                              {summary.citations?.map((cit: any, i: number) => (
+                              <div className="flex items-center justify-between px-2 mb-2">
+                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Primary Intelligence Sources</h4>
+                                <div className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-tight">
+                                  {summary.citations?.length || 0} results found (Limit: {currentCompany?.results_per_scan || 5})
+                                </div>
+                              </div>
+                              
+                              {summary.citations
+                                ?.sort((a: any, b: any) => (b.relevance_score || 0) - (a.relevance_score || 0))
+                                ?.slice(0, currentCompany?.results_per_scan || 5)
+                                ?.map((cit: any, i: number) => (
                                 <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 transition-all hover:shadow-sm techny-border">
                                    <div className="flex items-start justify-between gap-4">
                                       <div className="flex-1">

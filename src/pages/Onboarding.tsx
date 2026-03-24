@@ -6,7 +6,7 @@ import { getSourceSuggestions } from '../utils/mockAI'; // getTopicSuggestions r
 import { getTopicSuggestionsFromAI, getSourceSuggestionsFromAI, SourceSuggestion } from '../utils/perplexity';
 import { getTopicSuggestions, generateTopicSuggestions, TopicSuggestion } from '../utils/openai'; // getTopicSuggestions and TopicSuggestion added here
 import { generateMockUpdates } from '../utils/mockUpdates';
-import { Activity, Check, ChevronRight, ChevronLeft, Plus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, BarChart, Megaphone, Building2, Briefcase, AlertCircle, Zap, Info } from 'lucide-react'; // Info added here
+import { Activity, Check, ChevronRight, ChevronLeft, Plus, Minus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, BarChart, Megaphone, Building2, Briefcase, AlertCircle, Zap, Info } from 'lucide-react'; // Info added here
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import StripeCardInput from '../components/StripeCardInput';
@@ -96,6 +96,14 @@ export default function Onboarding() {
   const [keywordInput, setKeywordInput] = useState('');
   const [resultsPerScan, setResultsPerScan] = useState(5);
   const [requestingMoreSources, setRequestingMoreSources] = useState(false);
+
+  // Sync resultsPerScan with selected tier
+  useEffect(() => {
+    const tierConfig = TIER_CONFIGS[selectedTier];
+    if (tierConfig && !tierConfig.resultsChangeable) {
+      setResultsPerScan(tierConfig.maxResults);
+    }
+  }, [selectedTier]);
 
   useEffect(() => {
     completeSignup();
@@ -336,7 +344,7 @@ export default function Onboarding() {
       const nextScanDate = new Date();
       nextScanDate.setDate(today.getDate() + 7);
       
-      const { error: subscriptionError } = await supabase.from('watchdog_subscribers').insert({
+      const { error: subscriptionError } = await supabase.from('watchdog_subscribers').upsert({
         profile_id: profile.id,
         company_id: currentCompany.id,
         tier: selectedTier,
@@ -344,7 +352,7 @@ export default function Onboarding() {
         monthly_price: tierConfig.monthlyPrice,
         included_credits: tierConfig.monthlyCredits,
         current_period_end: nextScanDate.toISOString(),
-      });
+      }, { onConflict: 'profile_id' });
       if (subscriptionError) throw new Error(`Failed to save subscription details: ${subscriptionError.message}`);
 
       // Update companies table with next scan date and automated scan tracking
@@ -371,7 +379,7 @@ export default function Onboarding() {
         .update({
           content_types: selectedContentTypes,
           analysis_depth: 'standard',
-          results_per_scan: 5,
+          results_per_scan: resultsPerScan,
         })
         .eq('id', currentCompany.id);
       
@@ -434,7 +442,7 @@ export default function Onboarding() {
             scanOptions: {
               depth: 'standard',
               priority: 'balanced',
-              maxArticles: 5,
+              maxArticles: resultsPerScan,
               timeRange: '7days'
             }
           }),
@@ -1249,6 +1257,50 @@ export default function Onboarding() {
                       })}
                     </div>
                   </div>
+
+                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mt-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scan Sensitivity</h3>
+                      <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
+                        getTierConfig(selectedTier).resultsChangeable ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        {getTierConfig(selectedTier).resultsChangeable ? 'Customizable' : 'Fixed'}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100">
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">Results Per Scan</span>
+                          <span className="text-xl font-black text-slate-900">{resultsPerScan} Sources</span>
+                        </div>
+                        
+                        {getTierConfig(selectedTier).resultsChangeable && (
+                          <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                            <button 
+                              onClick={() => setResultsPerScan(Math.max(1, resultsPerScan - 1))}
+                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="text-sm font-black text-slate-900 w-4 text-center">{resultsPerScan}</span>
+                            <button 
+                              onClick={() => setResultsPerScan(Math.min(getTierConfig(selectedTier).maxResults, resultsPerScan + 1))}
+                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <p className="text-[10px] font-bold text-slate-400 leading-tight px-2 italic">
+                        {getTierConfig(selectedTier).resultsChangeable 
+                          ? "Enterprise users can adjust scan depth between 1-10 sources." 
+                          : "Standard tiers are optimized for the top 5 most relevant results."}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 rounded-[40px] p-10 flex flex-col justify-between shadow-2xl relative overflow-hidden">
@@ -1307,8 +1359,19 @@ export default function Onboarding() {
                       buttonText={`Activate Account - ${formatCurrency(pricing.monthly)}/month`}
                       amount={pricing.monthly}
                       description={`Securely process your subscription. Cancel anytime.`}
+                      isLoading={loading}
                     />
                   </Elements>
+
+                  {paymentError && (
+                    <div className="mt-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                      <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-rose-900 uppercase tracking-widest mb-1">Payment Failure</p>
+                        <p className="text-xs text-rose-700 font-bold leading-relaxed">{paymentError}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-6">

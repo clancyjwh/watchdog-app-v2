@@ -14,6 +14,7 @@ interface StripeCardInputProps {
   buttonText?: string;
   amount?: number;
   description?: string;
+  isLoading?: boolean;
 }
 
 const ELEMENT_OPTIONS = {
@@ -38,7 +39,8 @@ export default function StripeCardInput({
   onError,
   buttonText = 'Save Card',
   amount,
-  description
+  description,
+  isLoading = false
 }: StripeCardInputProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -52,7 +54,7 @@ export default function StripeCardInput({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripe || !elements) {
+    if (!stripe || !elements || processing || isLoading) {
       return;
     }
 
@@ -78,8 +80,10 @@ export default function StripeCardInput({
       }
     } catch (error: any) {
       onError(error.message || 'An error occurred processing your card');
-    } finally {
       setProcessing(false);
+    } finally {
+      // Don't set processing to false if success, as Onboarding will handle the next steps
+      // with its own loading state. However, on error we must reset.
     }
   };
 
@@ -142,13 +146,13 @@ export default function StripeCardInput({
 
       <button
         type="submit"
-        disabled={!stripe || !isFormComplete || processing}
+        disabled={!stripe || !isFormComplete || processing || isLoading}
         className="w-full bg-indigo-600 text-white py-4 px-4 rounded-xl font-bold text-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
       >
-        {processing ? (
+        {processing || isLoading ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            Activating...
+            Activating Account...
           </>
         ) : (
           buttonText

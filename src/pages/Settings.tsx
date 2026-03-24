@@ -27,7 +27,7 @@ import Sidebar from '../components/Sidebar';
 import CompanySwitcher from '../components/CompanySwitcher';
 import { syncSettingsToWebhook } from '../utils/webhookSync';
 import { generateTopicSuggestions } from '../utils/openai';
-import { calculatePricing, type PricingConfig } from '../utils/pricing';
+import { calculatePricing, type PricingConfig, getTierConfig, SubscriptionTier } from '../utils/pricing';
 
 type Topic = {
   id: string;
@@ -118,6 +118,16 @@ export default function SettingsPage() {
     };
     return calculatePricing(config);
   };
+
+  // Update resultsPerScan when tier changes to match plan defaults
+  useEffect(() => {
+    if (profile?.subscription_tier) {
+      const config = getTierConfig(profile.subscription_tier as SubscriptionTier);
+      if (!config.resultsChangeable) {
+        setResultsPerScan(config.maxResults);
+      }
+    }
+  }, [profile?.subscription_tier]);
 
   const handleGetTopicSuggestions = async () => {
     setAiLoading(true);
@@ -523,14 +533,29 @@ export default function SettingsPage() {
                           <option value="biweekly">Bi-Weekly</option>
                         </select>
                       </div>
-                      <div className="flex justify-between items-center">
-                         <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Results per Scan</span>
-                         <input
-                          type="number"
-                          value={resultsPerScan}
-                          onChange={(e) => setResultsPerScan(parseInt(e.target.value))}
-                          className="w-12 bg-slate-800 border-none rounded-xl px-2 py-1.5 text-xs font-black text-indigo-300 text-center outline-none"
-                        />
+                      <div className="flex justify-between items-center group relative">
+                         <div className="flex flex-col">
+                            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Results per Scan</span>
+                            <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">
+                               {getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable ? 'Customizable' : 'Fixed by plan'}
+                            </span>
+                         </div>
+                         <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={resultsPerScan}
+                              onChange={(e) => setResultsPerScan(parseInt(e.target.value))}
+                              disabled={!getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable}
+                              max={getTierConfig(profile?.subscription_tier as SubscriptionTier).maxResults}
+                              min={1}
+                              className="w-12 bg-slate-800 border-none rounded-xl px-2 py-1.5 text-xs font-black text-indigo-300 text-center outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            />
+                            {!getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable && (
+                              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 px-3 py-2 rounded-xl text-[9px] font-black text-white uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50">
+                                Upgrade to Enterprise to customize
+                              </div>
+                            )}
+                         </div>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">AI Analysis Level</span>

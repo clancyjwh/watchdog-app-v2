@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
         items: [
           {
             price_data: {
-              currency: "usd",
+              currency: "cad",
               product: TIER_PRODUCT_IDS[tier],
               unit_amount: price * 100,
               recurring: { interval: "month" },

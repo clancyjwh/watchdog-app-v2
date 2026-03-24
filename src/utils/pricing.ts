@@ -5,6 +5,8 @@ export type TierFeatures = {
   name: string;
   monthlyPrice: number;
   monthlyCredits: number;
+  maxResults: number;
+  resultsChangeable: boolean;
   features: string[];
 };
 
@@ -22,10 +24,13 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     name: 'Basic',
     monthlyPrice: 59,
     monthlyCredits: 100,
+    maxResults: 5,
+    resultsChangeable: false,
     productId: 'prod_TqxKX5neHjRYiu',
     features: [
       '3-day free trial included',
       '100 manual scan credits/month',
+      'Up to 5 results per scan',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
@@ -36,10 +41,13 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     name: 'Premium',
     monthlyPrice: 99,
     monthlyCredits: 300,
+    maxResults: 5,
+    resultsChangeable: false,
     productId: 'prod_TqxLzaw1hDuXLo',
     features: [
       '3-day free trial included',
       '300 manual scan credits/month',
+      'Up to 5 results per scan',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
@@ -51,10 +59,13 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     name: 'Enterprise',
     monthlyPrice: 199,
     monthlyCredits: 600,
+    maxResults: 10,
+    resultsChangeable: true,
     productId: 'prod_U7pGAo3uBjGCkb',
     features: [
       '3-day free trial included',
       '600 manual scan credits/month',
+      'Up to 10 results per scan (customizable)',
       'AI relevance scoring',
       'Dashboard delivery',
       'Custom update frequency (Daily, Bi-Weekly, Weekly)',
