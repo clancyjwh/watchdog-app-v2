@@ -170,10 +170,16 @@ export default function Onboarding() {
       } catch (e) {
         console.warn('Failed to parse saved onboarding state', e);
       }
-    } else if (!profile?.current_company_id) {
-      // If completely new user (no company and no saved state), ensure we start fresh
-      console.log('New user detected, starting onboarding at Step 1');
+    } else if (!profile?.current_company_id && !profile?.company_name) {
+      // If no company data exists in database and no saved state, start fresh
+      console.log('New user detected (no company), starting onboarding at Step 1');
       setCurrentStep(1);
+      localStorage.removeItem(`watchdog_onboarding_state_${user.id}`); // Clear local state
+    } else if (!profile?.current_company_id || !profile?.company_name) {
+      // Additional strict check: if either is missing, it's safer to start at Step 1 for a new profile
+      console.log('Incomplete profile detected, resetting to Step 1 for consistency');
+      setCurrentStep(1);
+      localStorage.removeItem(`watchdog_onboarding_state_${user.id}`); // Clear local state
     }
   }, [user?.id, authLoading]);
 
@@ -676,6 +682,7 @@ export default function Onboarding() {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1395,12 +1402,12 @@ export default function Onboarding() {
                     
                     <div className="space-y-3 mt-6 border-t border-white/5 pt-6">
                       <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-tight">
-                        <span>Resource Allocation</span>
-                        <span className="text-white">Full Access</span>
+                        <span>Daily Scan Depth</span>
+                        <span className="text-white">{getTierConfig(selectedTier).maxResults} Results / Scan</span>
                       </div>
                       <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-tight">
-                        <span>Manual Scan Clusters</span>
-                        <span className="text-white">Unlimited</span>
+                        <span>Manual Scan Credits</span>
+                        <span className="text-white">{getTierConfig(selectedTier).monthlyCredits} / Month</span>
                       </div>
                     </div>
 
