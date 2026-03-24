@@ -63,28 +63,18 @@ export default function Billing() {
     setPaymentError('');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data, error: functionError } = await supabase.functions.invoke('process-payment', {
+        body: {
+          action: 'save_card',
+          payment_method_id: paymentMethodId,
+          profile_id: profile.id,
+          user_email: user.email,
+        },
+      });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'save_card',
-            payment_method_id: paymentMethodId,
-            profile_id: profile.id,
-            user_email: user.email,
-          }),
-        }
-      );
-
-      const data = await response.json();
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to update card');
+      }
 
       if (data.success) {
         setShowCardForm(false);
@@ -123,25 +113,15 @@ export default function Billing() {
 
     setProcessingCheckout(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data, error: functionError } = await supabase.functions.invoke('create-billing-portal', {
+        body: {
+          profile_id: profile.id,
+        },
+      });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-billing-portal`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            profile_id: profile.id,
-          }),
-        }
-      );
-
-      const data = await response.json();
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to create billing portal');
+      }
       if (data.url) {
         window.location.href = data.url;
       } else {

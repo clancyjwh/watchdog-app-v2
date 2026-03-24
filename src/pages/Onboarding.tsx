@@ -671,32 +671,20 @@ export default function Onboarding() {
     setPaymentError('');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data, error: functionError } = await supabase.functions.invoke('process-payment', {
+        body: {
+          action: 'subscribe',
+          payment_method_id: paymentMethodId,
+          profile_id: profile.id,
+          user_email: user.email,
+          tier: selectedTier,
+          billing_period: 'monthly',
+        },
+      });
 
-      const pricing = calculatePricing();
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'subscribe',
-            payment_method_id: paymentMethodId,
-            profile_id: profile.id,
-            user_email: user.email,
-            tier: selectedTier,
-            billing_period: 'monthly',
-          }),
-        }
-      );
-
-      const data = await response.json();
+      if (functionError) {
+        throw new Error(functionError.message || 'Payment processing failed');
+      }
 
       if (data.success) {
         await handleFinish();

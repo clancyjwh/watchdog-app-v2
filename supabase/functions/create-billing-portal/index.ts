@@ -3,12 +3,16 @@ import Stripe from "npm:stripe@17.5.0";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2024-12-18.acacia",
 });
 
@@ -22,63 +26,75 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization")! },
-        },
-      }
-    );
+    console.log("--- Starting create-billing-portal Request ---");
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: {
+        headers: { Authorization: req.headers.get("Authorization")! },
+      },
+    });
 
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
-    if (!user) {
+    if (authError || !user) {
+      console.error("Auth error:", authError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
       );
     }
 
     const requestData: PortalRequest = await req.json();
+    console.log("User:", user.email, "Profile ID:", requestData.profile_id);
 
-    const { data: subscription, error: subError } = await supabaseClient
-      .from("subscriptions")
+    // Get customer ID from profiles
+    const { data: profile, error: dbError } = await supabaseClient
+      .from("profiles")
       .select("stripe_customer_id")
-      .eq("profile_id", requestData.profile_id)
+      .eq("id", requestData.profile_id)
       .maybeSingle();
 
-    if (subError) {
-      throw subError;
+    if (dbError) {
+      console.error("Database error looking up profile:", dbError);
+      throw dbError;
     }
 
-    if (!subscription?.stripe_customer_id) {
+    if (!profile?.stripe_customer_id) {
+      console.warn("No Stripe customer ID found for profile:", requestData.profile_id);
       return new Response(
-        JSON.stringify({ error: "No active subscription found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          success: false, 
+          error: "No active subscription or customer record found. Please add a payment method first." 
+        }),
+        { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
       );
     }
+
+    console.log("Found customer ID:", profile.stripe_customer_id);
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
     const returnUrl = `${origin}/billing`;
 
+    console.log("Creating Stripe billing portal session...");
     const session = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
+      customer: profile.stripe_customer_id,
       return_url: returnUrl,
     });
 
+    console.log("--- Success: Portal Created ---", session.url);
     return new Response(
-      JSON.stringify({ url: session.url }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, url: session.url }),
+      { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
     );
-  } catch (error) {
-    console.error("Error creating billing portal session:", error);
+
+  } catch (error: any) {
+    console.error("CRITICAL ERROR in create-billing-portal function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        details: error.toString(),
+      }),
+      { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
     );
   }
 });
