@@ -140,6 +140,47 @@ export default function Onboarding() {
   };
 
   const pricing = calculatePricing();
+
+  // Load and Save Onboarding State
+  useEffect(() => {
+    const savedState = localStorage.getItem('watchdog_onboarding_state');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        if (state.currentStep) setCurrentStep(state.currentStep);
+        if (state.companyName) setCompanyName(state.companyName);
+        if (state.businessDescription) setBusinessDescription(state.businessDescription);
+        if (state.industry) setIndustry(state.industry);
+        if (state.monitoringGoals) setMonitoringGoals(state.monitoringGoals);
+        if (state.selectedTopics) setSelectedTopics(state.selectedTopics);
+        if (state.selectedContentTypes) setSelectedContentTypes(state.selectedContentTypes);
+        if (state.selectedTier) setSelectedTier(state.selectedTier);
+        if (state.frequency) setFrequency(state.frequency);
+      } catch (e) {
+        console.warn('Failed to parse saved onboarding state', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const state = {
+      currentStep,
+      companyName,
+      businessDescription,
+      industry,
+      monitoringGoals,
+      selectedTopics,
+      selectedContentTypes,
+      selectedTier,
+      frequency
+    };
+    localStorage.setItem('watchdog_onboarding_state', JSON.stringify(state));
+  }, [currentStep, companyName, businessDescription, industry, monitoringGoals, selectedTopics, selectedContentTypes, selectedTier, frequency]);
+
+  const clearOnboardingState = () => {
+    localStorage.removeItem('watchdog_onboarding_state');
+  };
+
   const handleNext = async () => {
     console.log('handleNext called, currentStep:', currentStep);
 
@@ -309,7 +350,7 @@ export default function Onboarding() {
       // Update companies table with next scan date and automated scan tracking
       await supabase.from('companies').update({
         next_scan_due_date: nextScanDate.toISOString(),
-        subscription_frequency: 'weekly',
+        subscription_frequency: frequency,
         last_automated_scan_date: today.toISOString(),
       }).eq('id', currentCompany.id);
 
@@ -525,6 +566,7 @@ export default function Onboarding() {
         await triggerScannerWebhook(user.id, frequency);
       }
 
+      clearOnboardingState();
       navigate('/dashboard');
     } catch (error) {
       console.error('Error completing onboarding:', error);
@@ -1084,21 +1126,17 @@ export default function Onboarding() {
                 ))}
               </div>
 
-              <div className="bg-slate-900 rounded-3xl p-8 flex items-center justify-between border border-white/10 shadow-2xl">
+              <div className="bg-slate-900 rounded-3xl p-8 flex items-center justify-between border border-white/10 shadow-2xl invisible opacity-0 h-0 w-0 overflow-hidden">
                 <div className="flex items-center gap-5">
                   <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
                     <Info className="w-6 h-6 text-indigo-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-black text-sm uppercase tracking-widest mb-1">Flexible Monitoring</h4>
+                    <h4 className="text-white font-black text-sm uppercase tracking-widest mb-1">Monitoring System</h4>
                     <p className="text-slate-400 text-xs font-bold leading-relaxed">
                       All plans include automated web monitoring. You can adjust your settings anytime after setup.
                     </p>
                   </div>
-                </div>
-                <div className="text-right">
-                   <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Setup Fee</span>
-                   <span className="text-indigo-400 font-black text-lg">$0.00</span>
                 </div>
               </div>
             </div>
@@ -1400,8 +1438,8 @@ export default function Onboarding() {
           </button>
 
           <div className="flex items-center gap-12">
-            <div className="hidden sm:flex flex-col items-end">
-               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Step Efficiency</span>
+            <div className="hidden sm:flex flex-col items-end invisible opacity-0">
+               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Setup Progress</span>
                <span className="text-xs font-black text-slate-900 tracking-tighter">
                   {Math.round(((currentStep > 4 ? currentStep - 1 : currentStep) / 6) * 100)}% COMPLETE
                </span>

@@ -65,7 +65,7 @@ export const getTopicSuggestions = (businessDescription: string, industry: strin
 };
 
 /**
- * Generates suggested topics via Make.com webhook
+ * Generates suggested topics via automated webhook
  */
 export async function generateTopicSuggestions(
   businessDescription: string,
@@ -88,7 +88,7 @@ export async function generateTopicSuggestions(
     });
 
     if (!response.ok) {
-      console.error('Make.com Topics Webhook error:', response.status);
+      console.error('Topics Webhook error:', response.status);
       return [];
     }
 

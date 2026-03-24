@@ -7,6 +7,7 @@ import {
   Sparkles, TrendingUp, Info, ShieldAlert, Layers
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { triggerScannerWebhook } from '../utils/pricing';
 import Sidebar from '../components/Sidebar';
 import RelevanceModal from '../components/RelevanceModal';
 
@@ -102,8 +103,10 @@ export default function RealTimeScans() {
       });
 
       if (response.ok) {
+        // Trigger the manual scan webhook
+        await triggerScannerWebhook(user.id, currentCompany?.subscription_frequency || 'weekly', true);
         await loadScanSummaries();
-        alert('Deep Research Scan Complete! New articles added to feed.');
+        alert('Manual Research Scan Complete! New articles added to feed.');
       } else {
         throw new Error('Scan failed');
       }
@@ -139,7 +142,7 @@ export default function RealTimeScans() {
               Strategic Research
             </h1>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              Deep-dive AI analysis into your core areas of interest
+              On-demand AI analysis into your core areas of interest
             </p>
           </div>
 
@@ -164,7 +167,7 @@ export default function RealTimeScans() {
               ) : (
                 <Search className="w-4 h-4" />
               )}
-              Initialize Deep Scan
+              Initialize Manual Scan
             </button>
           </div>
         </header>
@@ -178,7 +181,7 @@ export default function RealTimeScans() {
                  </div>
                  <h2 className="text-xl font-bold text-slate-900">No Research Reports</h2>
                  <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-                    Initialize your first deep research scan to uncover insights across the web tailored to your business goals.
+                    Initialize your first manual research scan to uncover insights across the web tailored to your business goals.
                  </p>
               </div>
             ) : (
@@ -206,7 +209,7 @@ export default function RealTimeScans() {
                            <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md">
-                                  Deep Report
+                                  Manual Report
                                 </span>
                                 <span className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
                                   {summary.content_type} • {summary.article_count} Source Papers

@@ -250,9 +250,14 @@ function getDateOfISOWeek(week: number, year: number): Date {
 }
 
 /**
- * Triggers the Make.com scanner webhook for a specific user and frequency.
+ * Triggers the scanner for a specific user.
+ * For manual scans, this should be called AFTER credits are verified/spent.
  */
-export async function triggerScannerWebhook(userId: string, frequency: string): Promise<boolean> {
+export async function triggerScannerWebhook(
+  userId: string, 
+  frequency: string, 
+  isManual: boolean = false
+): Promise<boolean> {
   const WEBHOOK_URL = 'https://hook.us2.make.com/pgl69xy425vg3zasl4v0j9qs18ogk9hu';
 
   try {
@@ -264,6 +269,7 @@ export async function triggerScannerWebhook(userId: string, frequency: string): 
       body: JSON.stringify({
         user_id: userId,
         frequency: frequency,
+        is_manual: isManual,
         triggered_at: new Date().toISOString()
       }),
     });

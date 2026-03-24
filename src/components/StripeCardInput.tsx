@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { CreditCard, Loader2 } from 'lucide-react';
+import { 
+  CardNumberElement, 
+  CardExpiryElement, 
+  CardCvcElement, 
+  useStripe, 
+  useElements 
+} from '@stripe/react-stripe-js';
+import { CreditCard, Loader2, Calendar, Lock } from 'lucide-react';
 
 interface StripeCardInputProps {
   onSuccess: (paymentMethodId: string) => void;
@@ -9,6 +15,23 @@ interface StripeCardInputProps {
   amount?: number;
   description?: string;
 }
+
+const ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      fontSize: '16px',
+      color: '#1f2937',
+      '::placeholder': {
+        color: '#9ca3af',
+      },
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    },
+    invalid: {
+      color: '#ef4444',
+      iconColor: '#ef4444',
+    },
+  },
+};
 
 export default function StripeCardInput({
   onSuccess,
@@ -20,7 +43,11 @@ export default function StripeCardInput({
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
-  const [cardComplete, setCardComplete] = useState(false);
+  const [cardNumberComplete, setCardNumberComplete] = useState(false);
+  const [cardExpiryComplete, setCardExpiryComplete] = useState(false);
+  const [cardCvcComplete, setCardCvcComplete] = useState(false);
+
+  const isFormComplete = cardNumberComplete && cardExpiryComplete && cardCvcComplete;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,14 +59,14 @@ export default function StripeCardInput({
     setProcessing(true);
 
     try {
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
+      const cardNumberElement = elements.getElement(CardNumberElement);
+      if (!cardNumberElement) {
         throw new Error('Card element not found');
       }
 
       const { error, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
-        card: cardElement,
+        card: cardNumberElement,
       });
 
       if (error) {
@@ -56,36 +83,48 @@ export default function StripeCardInput({
     }
   };
 
-  const cardElementOptions = {
-    style: {
-      base: {
-        fontSize: '16px',
-        color: '#1f2937',
-        '::placeholder': {
-          color: '#9ca3af',
-        },
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-      },
-      invalid: {
-        color: '#ef4444',
-        iconColor: '#ef4444',
-      },
-    },
-    hidePostalCode: false,
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <CreditCard className="w-4 h-4 inline mr-2" />
-          Card Details
-        </label>
-        <div className="p-4 border border-gray-300 rounded-lg bg-white hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all">
-          <CardElement
-            options={cardElementOptions}
-            onChange={(e) => setCardComplete(e.complete)}
-          />
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <CreditCard className="w-4 h-4 inline mr-2 text-slate-400" />
+            Card Number
+          </label>
+          <div className="p-4 border border-gray-300 rounded-lg bg-white hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all">
+            <CardNumberElement
+              options={ELEMENT_OPTIONS}
+              onChange={(e) => setCardNumberComplete(e.complete)}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2 text-slate-400" />
+              Expiry Date
+            </label>
+            <div className="p-4 border border-gray-300 rounded-lg bg-white hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all">
+              <CardExpiryElement
+                options={ELEMENT_OPTIONS}
+                onChange={(e) => setCardExpiryComplete(e.complete)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Lock className="w-4 h-4 inline mr-2 text-slate-400" />
+              CVC / CVV
+            </label>
+            <div className="p-4 border border-gray-300 rounded-lg bg-white hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all">
+              <CardCvcElement
+                options={ELEMENT_OPTIONS}
+                onChange={(e) => setCardCvcComplete(e.complete)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -103,21 +142,22 @@ export default function StripeCardInput({
 
       <button
         type="submit"
-        disabled={!stripe || !cardComplete || processing}
-        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        disabled={!stripe || !isFormComplete || processing}
+        className="w-full bg-indigo-600 text-white py-4 px-4 rounded-xl font-bold text-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
       >
         {processing ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            Processing...
+            Activating...
           </>
         ) : (
           buttonText
         )}
       </button>
 
-      <p className="text-xs text-gray-500 text-center">
-        Secured by Stripe. Your card details are encrypted and never stored on our servers.
+      <p className="text-xs text-gray-500 text-center flex items-center justify-center gap-1.5">
+        <Lock className="w-3 h-3" />
+        Secured by Stripe SSL Encryption
       </p>
     </form>
   );
