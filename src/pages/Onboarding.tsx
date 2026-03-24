@@ -151,10 +151,13 @@ export default function Onboarding() {
 
   // Load and Save Onboarding State
   useEffect(() => {
-    const savedState = localStorage.getItem('watchdog_onboarding_state');
+    if (authLoading || !user?.id) return;
+
+    const savedState = localStorage.getItem(`watchdog_onboarding_state_${user.id}`);
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
+        console.log('Restoring user-specific onboarding state for:', user.id);
         if (state.currentStep) setCurrentStep(state.currentStep);
         if (state.companyName) setCompanyName(state.companyName);
         if (state.businessDescription) setBusinessDescription(state.businessDescription);
@@ -167,10 +170,16 @@ export default function Onboarding() {
       } catch (e) {
         console.warn('Failed to parse saved onboarding state', e);
       }
+    } else if (!profile?.current_company_id) {
+      // If completely new user (no company and no saved state), ensure we start fresh
+      console.log('New user detected, starting onboarding at Step 1');
+      setCurrentStep(1);
     }
-  }, []);
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
+    if (!user?.id) return;
+
     const state = {
       currentStep,
       companyName,
@@ -182,10 +191,13 @@ export default function Onboarding() {
       selectedTier,
       frequency
     };
-    localStorage.setItem('watchdog_onboarding_state', JSON.stringify(state));
-  }, [currentStep, companyName, businessDescription, industry, monitoringGoals, selectedTopics, selectedContentTypes, selectedTier, frequency]);
+    localStorage.setItem(`watchdog_onboarding_state_${user.id}`, JSON.stringify(state));
+  }, [currentStep, companyName, businessDescription, industry, monitoringGoals, selectedTopics, selectedContentTypes, selectedTier, frequency, user?.id]);
 
   const clearOnboardingState = () => {
+    if (user?.id) {
+      localStorage.removeItem(`watchdog_onboarding_state_${user.id}`);
+    }
     localStorage.removeItem('watchdog_onboarding_state');
   };
 
