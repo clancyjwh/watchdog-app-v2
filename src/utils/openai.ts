@@ -1,5 +1,49 @@
-const XAI_API_KEY = import.meta.env.VITE_XAI_API_KEY || import.meta.env.VITE_GROK_API_KEY;
-const XAI_API_URL = 'https://api.x.ai/v1/chat/completions';
+/**
+ * Generates suggested topics via Make.com webhook
+ */
+export async function generateTopicSuggestions(
+  businessDescription: string,
+  industry: string,
+  businessContext: string[] = []
+): Promise<string[]> {
+  const WEBHOOK_URL = 'https://hook.us2.make.com/f9mivoeldx87b02ty2xbqtk81jxb36km';
+
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        businessDescription,
+        industry,
+        businessContext: businessContext.join(', ')
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Make.com Topics Webhook error:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    // Support the format: { "suggestedTopics": [ { "topic": "...", "why": "...", ... } ] }
+    if (data.suggestedTopics && Array.isArray(data.suggestedTopics)) {
+      return data.suggestedTopics.map((item: any) => item.topic);
+    }
+
+    // Fallback for simple array format
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error calling Topics Webhook:', error);
+    return [];
+  }
+}
 
 export type RelevanceResult = {
   score: number;

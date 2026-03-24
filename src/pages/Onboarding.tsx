@@ -4,12 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getTopicSuggestions, getSourceSuggestions } from '../utils/mockAI';
 import { getTopicSuggestionsFromAI, getSourceSuggestionsFromAI, SourceSuggestion } from '../utils/perplexity';
+import { generateTopicSuggestions } from '../utils/openai';
 import { generateMockUpdates } from '../utils/mockUpdates';
 import { Activity, Check, ChevronRight, ChevronLeft, Plus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, BarChart, Megaphone, Building2, Briefcase, AlertCircle, Zap } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import StripeCardInput from '../components/StripeCardInput';
-import { formatCurrency, TIER_CONFIGS, SubscriptionTier, getTierConfig } from '../utils/pricing';
+import { formatCurrency, TIER_CONFIGS, SubscriptionTier, getTierConfig, triggerScannerWebhook, getNextDeliveryDate } from '../utils/pricing';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -37,8 +38,6 @@ const CONTENT_TYPES = [
   { id: 'news', label: 'News Articles', icon: Newspaper },
   { id: 'legislation', label: 'Legislation & Regulations', icon: FileText },
   { id: 'grants', label: 'Grant Opportunities', icon: Grant },
-  { id: 'reports', label: 'Industry Reports & Research', icon: BarChart },
-  { id: 'press', label: 'Press Releases & Announcements', icon: Megaphone },
   { id: 'government', label: 'Government Updates', icon: Building2 },
   { id: 'competitor', label: 'Competitor News', icon: Briefcase },
 ];
@@ -106,124 +105,24 @@ export default function Onboarding() {
     }
   }, [currentStep, businessDescription, industry]);
 
-  useEffect(() => {
-    if (currentStep === 4 && selectedTopics.length > 0 && suggestedSources.length === 0) {
-      loadSourceSuggestions();
-    }
-  }, [currentStep, selectedTopics]);
-
   const loadTopicSuggestions = async () => {
+    // Only call once if we already have suggestions
+    if (suggestedTopics.length > 0) return;
+
     setAiLoading(true);
     setAiError('');
 
-    const timeoutId = setTimeout(() => {
-      const fallbackTopics = getTopicSuggestions(businessDescription, industry);
-      setSuggestedTopics(fallbackTopics);
-      setAiError('Request timed out - showing curated topics');
-      setAiLoading(false);
-    }, 15000);
-
     try {
-      const aiTopics = await getTopicSuggestionsFromAI(businessDescription, industry);
-
-      clearTimeout(timeoutId);
-
-      if (aiTopics && aiTopics.length > 0) {
-        setSuggestedTopics(aiTopics);
-        setAiError('');
-      } else {
-        const fallbackTopics = getTopicSuggestions(businessDescription, industry);
-        setSuggestedTopics(fallbackTopics);
-        setAiError('AI suggestions temporarily unavailable - showing curated topics');
+      const suggestions = await generateTopicSuggestions(businessDescription, industry, businessContext);
+      if (suggestions && suggestions.length > 0) {
+        setSuggestedTopics(suggestions);
       }
     } catch (error) {
-      clearTimeout(timeoutId);
-      console.error('Error loading topic suggestions:', error);
-      const fallbackTopics = getTopicSuggestions(businessDescription, industry);
-      setSuggestedTopics(fallbackTopics);
-      setAiError('AI suggestions temporarily unavailable - showing curated topics');
+      console.error('Error loading AI topics:', error);
+      // Fallback
+      setSuggestedTopics(getTopicSuggestions(businessDescription, industry));
     } finally {
       setAiLoading(false);
-    }
-  };
-
-  const loadSourceSuggestions = async () => {
-    setAiLoading(true);
-    setAiError('');
-
-    const timeoutId = setTimeout(() => {
-      setSuggestedSources([]);
-      setAiError('Request timed out - you can skip this step or try again later');
-      setAiLoading(false);
-    }, 20000);
-
-    try {
-      const locationInfo = [locationCity, locationProvince, locationCountry].filter(Boolean).join(', ');
-      const aiSources = await getSourceSuggestionsFromAI(
-        selectedTopics,
-        industry,
-        businessDescription,
-        locationInfo
-      );
-
-      clearTimeout(timeoutId);
-
-      if (aiSources && aiSources.length >= 3) {
-        const sortedSources = [...aiSources].sort((a, b) => {
-          const scoreA = (a as any).relevanceScore || 5;
-          const scoreB = (b as any).relevanceScore || 5;
-          return scoreB - scoreA;
-        });
-        setSuggestedSources(sortedSources);
-      } else {
-        setSuggestedSources([]);
-        setAiError('Unable to find quality sources for your specific needs. We\'ll use general search instead to find the most relevant updates for you.');
-      }
-    } catch (error) {
-      clearTimeout(timeoutId);
-      setSuggestedSources([]);
-      setAiError('Unable to find quality sources for your specific needs. We\'ll use general search instead to find the most relevant updates for you.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const requestMoreSourcesByCategory = async (category: string) => {
-    setRequestingMoreSources(true);
-    setAiError('');
-
-    try {
-      const locationInfo = [locationCity, locationProvince, locationCountry].filter(Boolean).join(', ');
-      const aiSources = await getSourceSuggestionsFromAI(
-        selectedTopics,
-        industry,
-        businessDescription,
-        locationInfo,
-        category
-      );
-
-      if (aiSources && aiSources.length > 0) {
-        const newSources = aiSources.filter(
-          (newSource) => !suggestedSources.some((existing) => existing.url === newSource.url)
-        );
-
-        if (newSources.length > 0) {
-          const sortedNewSources = [...newSources].sort((a, b) => {
-            const scoreA = (a as any).relevanceScore || 5;
-            const scoreB = (b as any).relevanceScore || 5;
-            return scoreB - scoreA;
-          });
-          setSuggestedSources([...suggestedSources, ...sortedNewSources]);
-        } else {
-          setAiError(`No new ${category.toLowerCase()} sources found. Try a different category.`);
-        }
-      } else {
-        setAiError(`No ${category.toLowerCase()} sources found for your topics.`);
-      }
-    } catch (error) {
-      setAiError(`Unable to find more ${category.toLowerCase()} sources. Please try again.`);
-    } finally {
-      setRequestingMoreSources(false);
     }
   };
 
@@ -233,6 +132,7 @@ export default function Onboarding() {
     return { monthly };
   };
 
+  const pricing = calculatePricing();
   const handleNext = async () => {
     console.log('handleNext called, currentStep:', currentStep);
 
@@ -312,6 +212,10 @@ export default function Onboarding() {
       setLoading(false);
       console.log('Setting step to 2');
       setCurrentStep(2);
+    } else if (currentStep === 3) {
+      // Skip Step 4 (Sources) and go straight to Step 5 (Content)
+      console.log('Advancing step from 3 to 5 (skipping Sources)');
+      setCurrentStep(5);
     } else if (currentStep === 6) {
       // Step 6 (Review) now leads to Step 7 (Payment)
       console.log('Setting step to 7 (Payment) from step 6');
@@ -326,6 +230,9 @@ export default function Onboarding() {
   const handleBack = () => {
     if (currentStep === 8) {
       setCurrentStep(7);
+    } else if (currentStep === 5) {
+      // Back from Step 5 goes to Step 3 (skipping Sources)
+      setCurrentStep(3);
     } else if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as Step);
     }
@@ -605,6 +512,11 @@ export default function Onboarding() {
       }
 
       await refreshProfile();
+      // Trigger Enterprise scanner if needed
+      if (selectedTier === 'enterprise') {
+        await triggerScannerWebhook(user.id, frequency);
+      }
+
       navigate('/dashboard');
     } catch (error) {
       console.error('Error completing onboarding:', error);
@@ -626,26 +538,7 @@ export default function Onboarding() {
     }
   };
 
-  const toggleSource = (source: SourceSuggestion) => {
-    setSelectedSources((prev) => {
-      const isSelected = prev.find((s) => s.url === source.url);
-      if (isSelected) {
-        return prev.filter((s) => s.url !== source.url);
-      } else {
-        // No source limit anymore
-        return [...prev, source];
-      }
-    });
-  };
 
-
-  const addCustomSource = () => {
-    if (customSource.name.trim() && customSource.url.trim()) {
-      // No source limit anymore
-      setSelectedSources((prev) => [...prev, customSource]);
-      setCustomSource({ name: '', url: '', description: '', category: '', rssFeedUrl: '' });
-    }
-  };
 
 
   const toggleContentType = (typeId: string) => {
@@ -684,8 +577,6 @@ export default function Onboarding() {
         return selectedTopics.length > 0;
       case 3:
         return true;
-      case 4:
-        return selectedSources.length > 0 || (suggestedSources.length === 0 && !aiLoading);
       case 5:
         return selectedContentTypes.length > 0;
       case 6:
@@ -746,8 +637,6 @@ export default function Onboarding() {
     setPaymentError(error);
   };
 
-  const pricing = calculatePricing();
-
   if ((authLoading && !profile) || (!authLoading && (!profile || !user))) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -770,23 +659,23 @@ export default function Onboarding() {
           </div>
 
           <div className="flex items-center justify-between mb-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
+            {[1, 2, 3, 5, 6, 7, 8].map((step) => (
               <div key={step} className="flex-1 flex items-center">
                 <div
                   className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-xs transition-all ${
-                    step < currentStep
+                    step < currentStep || (currentStep > 4 && step === 3)
                       ? 'bg-green-500 text-white'
                       : step === currentStep
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
-                  {step < currentStep ? <Check className="w-3 h-3" /> : step}
+                  {step < currentStep || (currentStep > 4 && step === 3) ? <Check className="w-3 h-3" /> : (step > 4 ? step - 1 : step)}
                 </div>
                 {step < 8 && (
                   <div
                     className={`flex-1 h-1 mx-1 transition-all ${
-                      step < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                      step < currentStep || (currentStep > 4 && step === 3) ? 'bg-green-500' : 'bg-gray-200'
                     }`}
                   />
                 )}
@@ -798,7 +687,6 @@ export default function Onboarding() {
             <span className="text-center">Business</span>
             <span className="text-center">Topics</span>
             <span className="text-center">Plan</span>
-            <span className="text-center">Sources</span>
             <span className="text-center">Content</span>
             <span className="text-center">Review</span>
             <span className="text-center">Complete</span>
@@ -1121,230 +1009,6 @@ export default function Onboarding() {
             </div>
           )}
 
-          {currentStep === 4 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Where should we monitor?</h2>
-                <p className="text-gray-600">
-                  {aiLoading ? 'AI is finding authoritative sources...' : 'Select relevant sources for your topics'}
-                </p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-blue-800">
-                  Select any relevant sources to help our AI understand your monitoring needs.
-                </p>
-              </div>
-
-
-              {aiLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                    <p className="mt-4 text-gray-600">Discovering sources...</p>
-                  </div>
-                </div>
-              ) : suggestedSources.length === 0 ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                    <Activity className="w-8 h-8 text-blue-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">We'll use AI web scanning instead</h3>
-                  <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
-                    We couldn't find specific sources that publish regular updates for your topics. That's okay - our AI will continuously scan the entire web to find the most relevant and recent updates for your business.
-                  </p>
-                  <div className="bg-white rounded-lg p-4 text-left max-w-md mx-auto mb-4">
-                    <p className="text-sm font-semibold text-gray-900 mb-2">What this means:</p>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>✓ Comprehensive AI-powered web scanning</li>
-                      <li>✓ Updates delivered to your dashboard in real-time</li>
-                      <li>✓ No additional source monitoring costs</li>
-                      <li>✓ All relevant content filtered to your business</li>
-                    </ul>
-                  </div>
-                  {selectedSources.length > 0 && (
-                    <div className="mt-6">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Your custom sources:</p>
-                      <div className="space-y-2">
-                        {selectedSources.map((source) => (
-                          <div key={source.url} className="bg-white rounded-lg p-3 text-left">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-gray-900">{source.name}</p>
-                              {source.category && (
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded">
-                                  {source.category}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-600 mt-1">{source.url}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="border-t border-blue-200 mt-6 pt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Add a Custom Source (Optional)</label>
-                    <div className="space-y-3">
-                      <input
-                        type="text"
-                        value={customSource.name}
-                        onChange={(e) => setCustomSource({ ...customSource, name: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="Source name"
-                      />
-                      <input
-                        type="url"
-                        value={customSource.url}
-                        onChange={(e) => setCustomSource({ ...customSource, url: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="https://example.com"
-                      />
-                      <input
-                        type="text"
-                        value={customSource.category}
-                        onChange={(e) => setCustomSource({ ...customSource, category: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="Category (e.g., News, Grants, Regulations)"
-                      />
-                      <button
-                        onClick={addCustomSource}
-                        disabled={!customSource.name || !customSource.url}
-                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Add Source
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                {suggestedSources.map((source) => {
-                  const relevanceScore = source.relevanceScore || 8;
-                  const isSelected = selectedSources.find((s) => s.url === source.url);
-                  return (
-                  <button
-                    key={source.url}
-                    onClick={() => {
-                      const isSelected = selectedSources.find((s) => s.url === source.url);
-                      const tierLimit = getTierConfig(selectedTier).sources;
-                      
-                      if (!isSelected && selectedSources.length >= tierLimit) {
-                        alert(`Your ${getTierConfig(selectedTier).name} plan is limited to ${tierLimit} sources. Please upgrade to add more.`);
-                        return;
-                      }
-                      toggleSource(source);
-                    }}
-                    className={`w-full px-4 py-4 rounded-lg border-2 text-left transition-all ${
-                      selectedSources.find((s) => s.url === source.url)
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-semibold text-gray-900">{source.name}</h3>
-                          {source.category && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded">
-                              {source.category}
-                            </span>
-                          )}
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
-                            {relevanceScore}/10
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">{source.description}</p>
-                        <p className="text-xs text-blue-600 mt-1">{source.url}</p>
-                      </div>
-                      {isSelected && (
-                        <Check className="w-5 h-5 text-blue-600 flex-shrink-0 ml-2" />
-                      )}
-                    </div>
-                  </button>
-                );
-                })}
-              </div>
-
-              {selectedSources.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-blue-900">
-                        {selectedSources.length} {selectedSources.length === 1 ? 'source' : 'sources'} selected
-                      </p>
-                      <p className="text-xs text-blue-700 mt-0.5">
-                        Active monitoring + timely updates to your dashboard
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-
-              <div className="border-t pt-6">
-                <div className="mb-6">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Want to see more sources?</p>
-                  <div className="flex flex-wrap gap-2">
-                    {['Grants', 'News', 'Legislation', 'Reports', 'Government'].map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => requestMoreSourcesByCategory(category)}
-                        disabled={requestingMoreSources}
-                        className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all text-sm font-medium border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {requestingMoreSources ? 'Loading...' : `${category}`}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Click to discover more sources in specific categories</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Add Custom Source</label>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={customSource.name}
-                    onChange={(e) => setCustomSource({ ...customSource, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Source name"
-                  />
-                  <input
-                    type="url"
-                    value={customSource.url}
-                    onChange={(e) => setCustomSource({ ...customSource, url: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                    placeholder="https://example.com"
-                  />
-                  <input
-                    type="text"
-                    value={customSource.category}
-                    onChange={(e) => setCustomSource({ ...customSource, category: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Category (e.g., News, Grants, Regulations)"
-                  />
-                  <input
-                    type="text"
-                    value={customSource.description}
-                    onChange={(e) => setCustomSource({ ...customSource, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Brief description (optional)"
-                  />
-                  <button
-                    onClick={addCustomSource}
-                    className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                  >
-                    Add Source
-                  </button>
-                </div>
-              </div>
-                </>
-              )}
-            </div>
-          )}
 
           {currentStep === 5 && (
             <div className="space-y-6">

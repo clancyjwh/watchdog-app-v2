@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        // Only show global loading on initial sign in if no profile exists
+        const silent = event !== 'SIGNED_IN' || !!profile;
+        fetchProfile(session.user.id, silent);
       } else {
         setProfile(null);
         setLoading(false);

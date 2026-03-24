@@ -25,7 +25,6 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     productId: 'prod_TqxKX5neHjRYiu',
     features: [
       '3-day free trial included',
-      'Monitor up to 3 sources',
       '100 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
@@ -40,7 +39,6 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     productId: 'prod_TqxLzaw1hDuXLo',
     features: [
       '3-day free trial included',
-      'Monitor up to 5 sources',
       '300 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
@@ -56,13 +54,13 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     productId: 'prod_U7pGAo3uBjGCkb',
     features: [
       '3-day free trial included',
-      'Monitor up to 10 sources',
       '600 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
+      'Custom update frequency (Daily, Bi-Weekly, Weekly)',
+      'Email delivery (Slack & Teams coming soon)',
       'Priority support',
       'Advanced analytics',
-      'Email delivery (Slack & Teams coming soon)',
     ],
   },
 };
@@ -83,7 +81,6 @@ export function calculateScansFromCredits(credits: number): number {
 
 export type PricingConfig = {
   tier: SubscriptionTier;
-  sourceCount: number;
   contentTypeCount: number;
   deliveryMethod: 'dashboard' | 'email' | 'slack';
   deepAnalysis: boolean;
@@ -91,7 +88,6 @@ export type PricingConfig = {
 
 export type PricingBreakdown = {
   basePrice: number;
-  sourcesPrice: number;
   contentTypesPrice: number;
   deliveryPrice: number;
   deepAnalysisPrice: number;
@@ -104,7 +100,6 @@ export type PricingBreakdown = {
 export function calculatePricing(config: PricingConfig): PricingBreakdown {
   const tierConfig = TIER_CONFIGS[config.tier || 'basic'];
   const basePrice = tierConfig.monthlyPrice;
-  const sourcesPrice = 0;
   const contentTypesPrice = 0;
   const deliveryPrice = 0;
   const deepAnalysisPrice = config.deepAnalysis ? 20 : 0;
@@ -117,7 +112,6 @@ export function calculatePricing(config: PricingConfig): PricingBreakdown {
 
   return {
     basePrice,
-    sourcesPrice,
     contentTypesPrice,
     deliveryPrice,
     deepAnalysisPrice,
@@ -128,11 +122,12 @@ export function calculatePricing(config: PricingConfig): PricingBreakdown {
   };
 }
 
-export function getFrequencyLabel(frequency: 'monthly' | 'biweekly' | 'weekly'): string {
+export function getFrequencyLabel(frequency: 'monthly' | 'biweekly' | 'weekly' | 'daily'): string {
   return {
     monthly: 'Monthly',
     biweekly: 'Bi-Weekly',
     weekly: 'Weekly',
+    daily: 'Daily',
   }[frequency];
 }
 
@@ -149,7 +144,7 @@ export function formatCurrency(amount: number): string {
 }
 
 export function getNextDeliveryDate(
-  frequency: 'monthly' | 'biweekly' | 'weekly',
+  frequency: 'monthly' | 'biweekly' | 'weekly' | 'daily',
   lastDelivery?: Date
 ): Date {
   const now = lastDelivery || new Date();
@@ -169,6 +164,10 @@ export function getNextDeliveryDate(
       next.setDate(1);
       next.setHours(9, 0, 0, 0);
       break;
+    case 'daily':
+      next.setDate(next.getDate() + 1);
+      next.setHours(9, 0, 0, 0);
+      break;
   }
 
   return next;
@@ -186,7 +185,7 @@ export function formatNextDeliveryDate(date: Date): string {
   });
 }
 
-export function getDeliveryBatchKey(frequency: 'monthly' | 'biweekly' | 'weekly', date: Date = new Date()): string {
+export function getDeliveryBatchKey(frequency: 'monthly' | 'biweekly' | 'weekly' | 'daily', date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -200,6 +199,8 @@ export function getDeliveryBatchKey(frequency: 'monthly' | 'biweekly' | 'weekly'
       return `${year}-bw${String(biweekNumber).padStart(2, '0')}`;
     case 'monthly':
       return `${year}-${month}`;
+    case 'daily':
+      return `${year}-${month}-${day}`;
   }
 }
 
@@ -211,7 +212,7 @@ function getWeekNumber(date: Date): number {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
-export function getDeliveryBatchLabel(frequency: 'monthly' | 'biweekly' | 'weekly', batchKey: string): string {
+export function getDeliveryBatchLabel(frequency: 'monthly' | 'biweekly' | 'weekly' | 'daily', batchKey: string): string {
   const parts = batchKey.split('-');
   const year = parts[0];
 
@@ -230,6 +231,9 @@ export function getDeliveryBatchLabel(frequency: 'monthly' | 'biweekly' | 'weekl
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
       return `${monthNames[parseInt(parts[1]) - 1]} ${year}`;
+    case 'daily':
+      const d = new Date(batchKey);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 }
 
@@ -243,4 +247,30 @@ function getDateOfISOWeek(week: number, year: number): Date {
     ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
   }
   return ISOweekStart;
+}
+
+/**
+ * Triggers the Make.com scanner webhook for a specific user and frequency.
+ */
+export async function triggerScannerWebhook(userId: string, frequency: string): Promise<boolean> {
+  const WEBHOOK_URL = 'https://hook.us2.make.com/pgl69xy425vg3zasl4v0j9qs18ogk9hu';
+
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        frequency: frequency,
+        triggered_at: new Date().toISOString()
+      }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Error triggering scanner webhook:', error);
+    return false;
+  }
 }
