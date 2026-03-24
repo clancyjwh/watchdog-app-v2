@@ -4,7 +4,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -13,13 +12,15 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function getStripeKey(): Promise<string> {
-  const { data, error } = await supabase
-    .rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
+  const envKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (envKey) return envKey;
+
+  console.log("Stripe key not in env, checking vault...");
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
 
   if (error || !data) {
-    throw new Error('Failed to retrieve Stripe key from vault');
+    throw new Error('Failed to retrieve Stripe key (not found in env or vault)');
   }
-
   return data;
 }
 
@@ -41,7 +42,7 @@ interface CheckoutRequest {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
@@ -70,21 +71,15 @@ Deno.serve(async (req: Request) => {
       };
 
       const tier = requestData.tier || "basic";
-      const price = TIER_PRICES[tier];
-
-      const TIER_FEATURES = {
-        'basic': '3 sources, 100 manual scan credits/month, 3-day free trial',
-        'premium': '5 sources, 300 manual scan credits/month, 3-day free trial, advanced analytics',
-        'enterprise': '10 sources, 600 manual scan credits/month, 3-day free trial, email/slack integration',
-      };
+      const price = TIER_PRICES[tier as keyof typeof TIER_PRICES];
 
       const session = await stripe.checkout.sessions.create({
         customer_email: requestData.user_email,
         line_items: [
           {
             price_data: {
-              currency: "usd",
-              product: TIER_PRODUCT_IDS[tier],
+              currency: "cad",
+              product: TIER_PRODUCT_IDS[tier as keyof typeof TIER_PRODUCT_IDS],
               unit_amount: price * 100,
               recurring: { interval: "month" },
             },
@@ -102,7 +97,6 @@ Deno.serve(async (req: Request) => {
           company_id: requestData.company_id || "",
           type: "subscription",
           tier: tier,
-          billing_period: "monthly",
           company_name: requestData.company_name || "",
           industry: requestData.industry || "",
           description: requestData.description || "",
@@ -122,7 +116,7 @@ Deno.serve(async (req: Request) => {
         line_items: [
           {
             price_data: {
-              currency: "usd",
+              currency: "cad",
               product_data: {
                 name: `${requestData.credit_package?.credits} Manual Scan Credits`,
                 description: `One-time credit purchase (${Math.floor((requestData.credit_package?.credits || 0) / 25)} manual scans)`,
@@ -149,13 +143,12 @@ Deno.serve(async (req: Request) => {
     }
 
     throw new Error("Invalid request type");
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating checkout session:", error);
     return new Response(
       JSON.stringify({
         error: error.message,
         details: error.toString(),
-        stripe_key_present: !!Deno.env.get("STRIPE_SECRET_KEY"),
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

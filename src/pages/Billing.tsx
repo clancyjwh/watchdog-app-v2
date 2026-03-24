@@ -76,12 +76,12 @@ export default function Billing() {
         throw new Error(functionError.message || 'Failed to update card');
       }
 
-      if (data.success) {
+      if (data && data.success) {
         setShowCardForm(false);
         await loadData();
         alert('Card saved successfully!');
       } else {
-        throw new Error(data.error || 'Failed to save card');
+        throw new Error(data?.error || 'Failed to save card');
       }
     } catch (error) {
       console.error('Error saving card:', error);
@@ -122,10 +122,10 @@ export default function Billing() {
       if (functionError) {
         throw new Error(functionError.message || 'Failed to create billing portal');
       }
-      if (data.url) {
+      if (data && data.url) {
         window.location.href = data.url;
       } else {
-        throw new Error('No portal URL returned');
+        throw new Error(data?.error || 'No portal URL returned');
       }
     } catch (error) {
       console.error('Error opening billing portal:', error);

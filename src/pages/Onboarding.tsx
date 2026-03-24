@@ -686,10 +686,10 @@ export default function Onboarding() {
         throw new Error(functionError.message || 'Payment processing failed');
       }
 
-      if (data.success) {
+      if (data && data.success) {
         await handleFinish();
       } else {
-        throw new Error(data.error || 'Payment failed');
+        throw new Error(data?.error || 'Payment failed');
       }
     } catch (error) {
       console.error('Payment error:', error);

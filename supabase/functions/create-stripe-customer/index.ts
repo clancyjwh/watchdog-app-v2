@@ -4,61 +4,45 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-);
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+async function getStripeKey(): Promise<string> {
+  const envKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (envKey) return envKey;
+
+  console.log("Stripe key not in env, checking vault...");
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
+
+  if (error || !data) {
+    throw new Error('Failed to retrieve Stripe key (not found in env or vault)');
+  }
+  return data;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
-    const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
-
-    if (!stripeSecret) {
-      console.log('Stripe not configured, skipping customer creation');
-      return new Response(
-        JSON.stringify({ success: true, skipped: true, message: 'Stripe not configured' }),
-        {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    }
-
-    const stripe = new Stripe(stripeSecret, {
-      appInfo: {
-        name: 'WatchDog AI',
-        version: '1.0.0',
-      },
-    });
-
     const { user_id, email, name } = await req.json();
 
     if (!user_id || !email) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: user_id and email' }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const stripeKey = await getStripeKey();
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: "2024-12-18.acacia",
+    });
 
     // Check if customer already exists
     const { data: existingCustomer } = await supabase
@@ -76,13 +60,7 @@ Deno.serve(async (req: Request) => {
           customer_id: existingCustomer.customer_id,
           already_exists: true
         }),
-        {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -117,13 +95,7 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ error: 'Failed to save customer information' }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -132,25 +104,13 @@ Deno.serve(async (req: Request) => {
         success: true,
         customer_id: customer.id
       }),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
     console.error('Error creating Stripe customer:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

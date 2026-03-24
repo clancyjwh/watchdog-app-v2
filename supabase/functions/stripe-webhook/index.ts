@@ -2,16 +2,36 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
-const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
-const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
-});
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+async function getStripeKey(): Promise<string> {
+  const envKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (envKey) return envKey;
+
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
+  if (error || !data) {
+    throw new Error('Failed to retrieve Stripe key (not found in env or vault)');
+  }
+  return data;
+}
+
+async function getWebhookSecret(): Promise<string> {
+  const envSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+  if (envSecret) return envSecret;
+
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_WEBHOOK_SECRET' });
+  if (error || !data) {
+    throw new Error('Failed to retrieve Webhook secret (not found in env or vault)');
+  }
+  return data;
+}
 
 // Map Stripe price IDs to subscription tiers
 const PRICE_TO_TIER: Record<string, string> = {
@@ -24,23 +44,9 @@ function getTierFromPriceId(priceId: string): string {
   return PRICE_TO_TIER[priceId] || 'basic';
 }
 
-async function notifySignupWebhook(data: {
-  full_name: string;
-  email: string;
-  plan: string;
-  payment_status: string;
-  subscription_status?: string;
-  subscription_id?: string;
-  amount_paid?: number;
-  currency?: string;
-  period_end?: number;
-  company_name?: string;
-  industry?: string;
-  description?: string;
-  monitoring_goals?: string;
-}) {
+async function notifySignupWebhook(data: any) {
   try {
-    const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-signup-webhook`;
+    const webhookUrl = `${supabaseUrl}/functions/v1/notify-signup-webhook`;
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
@@ -52,46 +58,46 @@ async function notifySignupWebhook(data: {
 
     if (!response.ok) {
       console.error('Failed to notify webhook:', await response.text());
-    } else {
-      console.info('Successfully notified signup webhook');
     }
   } catch (error) {
     console.error('Error calling signup webhook:', error);
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   try {
-    // Handle OPTIONS request for CORS preflight
     if (req.method === 'OPTIONS') {
-      return new Response(null, { status: 204 });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     if (req.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
     }
 
-    // get the signature from the header
     const signature = req.headers.get('stripe-signature');
-
     if (!signature) {
       return new Response('No signature found', { status: 400 });
     }
 
-    // get the raw body
     const body = await req.text();
+    const stripeKey = await getStripeKey();
+    const webhookSecret = await getWebhookSecret();
+    const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
-    // verify the webhook signature
     let event: Stripe.Event;
-
     try {
-      event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
+      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
     } catch (error: any) {
       console.error(`Webhook signature verification failed: ${error.message}`);
       return new Response(`Webhook signature verification failed: ${error.message}`, { status: 400 });
     }
 
-    EdgeRuntime.waitUntil(handleEvent(event));
+    // Use EdgeRuntime.waitUntil if available (Supabase specific)
+    if ((globalThis as any).EdgeRuntime) {
+      (globalThis as any).EdgeRuntime.waitUntil(handleEvent(event, stripe));
+    } else {
+      handleEvent(event, stripe);
+    }
 
     return Response.json({ received: true });
   } catch (error: any) {
@@ -100,7 +106,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function handleEvent(event: Stripe.Event) {
+async function handleEvent(event: Stripe.Event, stripe: Stripe) {
   const stripeData = event?.data?.object ?? {};
 
   if (!stripeData) {
@@ -136,7 +142,7 @@ async function handleEvent(event: Stripe.Event) {
     if (isSubscription) {
       console.info(`Starting subscription sync for customer: ${customerId}`);
       const metadata = (stripeData as any).metadata || {};
-      await syncCustomerFromStripe(customerId, metadata);
+      await syncCustomerFromStripe(customerId, stripe, metadata);
     } else if (mode === 'payment' && payment_status === 'paid') {
       try {
         // Get user info from stripe_customers table
@@ -198,7 +204,7 @@ async function handleEvent(event: Stripe.Event) {
 }
 
 // based on the excellent https://github.com/t3dotgg/stripe-recommendations
-async function syncCustomerFromStripe(customerId: string, metadata: any = {}) {
+async function syncCustomerFromStripe(customerId: string, stripe: Stripe, metadata: any = {}) {
   try {
     // Get user info from stripe_customers table
     const { data: customerData } = await supabase

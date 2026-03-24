@@ -12,11 +12,16 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function getStripeKey(): Promise<string> {
-  const { data, error } = await supabase
-    .rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
+  // 1. Check environment variable (Supabase Dashboard Secrets)
+  const envKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (envKey) return envKey;
+
+  // 2. Fallback to Supabase Vault
+  console.log("Stripe key not in env, checking vault...");
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
 
   if (error || !data) {
-    throw new Error('Failed to retrieve Stripe key from vault');
+    throw new Error('Failed to retrieve Stripe key (not found in env or vault)');
   }
   return data;
 }
@@ -39,16 +44,15 @@ interface PaymentRequest {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
     console.log("--- Starting process-payment Request ---");
     const requestData: PaymentRequest = await req.json();
-    console.log("Action:", requestData.action);
-    console.log("User Email:", requestData.user_email);
-    console.log("Profile ID:", requestData.profile_id);
+    console.log(`Action: ${requestData.action}, User: ${requestData.user_email}`);
 
     const stripeKey = await getStripeKey();
     const stripe = new Stripe(stripeKey, {
@@ -184,7 +188,7 @@ Deno.serve(async (req: Request) => {
           }, { onConflict: 'profile_id' })
       ]);
       
-      console.log("DB Sync results:", results.map(r => r.status));
+      console.log("DB Sync complete");
 
       console.log("--- Success: Subscribed ---");
       return new Response(
@@ -197,7 +201,7 @@ Deno.serve(async (req: Request) => {
       console.log("Handling purchase_credits action:", requestData.credit_package?.credits);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: (requestData.credit_package?.price || 0) * 100,
-        currency: 'usd',
+        currency: 'cad',
         customer: customer.id,
         payment_method: requestData.payment_method_id,
         off_session: true,
@@ -212,12 +216,19 @@ Deno.serve(async (req: Request) => {
 
       if (paymentIntent.status === 'succeeded') {
         console.log("PaymentIntent succeeded, incrementing credits in DB");
+        // Use standard update since Supabase RPC 'increment' might not be available or named differently
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('manual_scan_credits')
+          .eq('id', requestData.profile_id)
+          .single();
+        
+        const newCredits = (profile?.manual_scan_credits || 0) + (requestData.credit_package?.credits || 0);
+
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            manual_scan_credits: supabase.rpc('increment', {
-              x: requestData.credit_package?.credits || 0,
-            }),
+            manual_scan_credits: newCredits,
           })
           .eq('id', requestData.profile_id);
 
@@ -237,14 +248,13 @@ Deno.serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("CRITICAL ERROR in process-payment function:", error);
-    // Even in error, we return CORS headers so the client can read the error message
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message,
         details: error.toString(),
       }),
-      { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
+      { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } }
     );
   }
 });

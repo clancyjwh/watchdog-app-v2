@@ -9,11 +9,19 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
 
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2024-12-18.acacia",
-});
+async function getStripeKey(supabase: any): Promise<string> {
+  const envKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (envKey) return envKey;
+
+  console.log("Stripe key not in env, checking vault...");
+  const { data, error } = await supabase.rpc('get_secret', { secret_name: 'STRIPE_SECRET_KEY' });
+
+  if (error || !data) {
+    throw new Error('Failed to retrieve Stripe key (not found in env or vault)');
+  }
+  return data;
+}
 
 interface PortalRequest {
   profile_id: string;
@@ -21,7 +29,7 @@ interface PortalRequest {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
@@ -38,12 +46,17 @@ Deno.serve(async (req: Request) => {
       console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
+        { status: 401, headers: { ...corsHeaders, "content-type": "application/json" } }
       );
     }
 
     const requestData: PortalRequest = await req.json();
-    console.log("User:", user.email, "Profile ID:", requestData.profile_id);
+    console.log(`User: ${user.email}, Profile ID: ${requestData.profile_id}`);
+
+    const stripeKey = await getStripeKey(createClient(supabaseUrl, supabaseServiceKey));
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: "2024-12-18.acacia",
+    });
 
     // Get customer ID from profiles
     const { data: profile, error: dbError } = await supabaseClient
@@ -64,7 +77,7 @@ Deno.serve(async (req: Request) => {
           success: false, 
           error: "No active subscription or customer record found. Please add a payment method first." 
         }),
-        { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } }
       );
     }
 
@@ -93,7 +106,7 @@ Deno.serve(async (req: Request) => {
         error: error.message,
         details: error.toString(),
       }),
-      { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } }
     );
   }
 });
