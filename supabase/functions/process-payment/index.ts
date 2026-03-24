@@ -3,9 +3,8 @@ import Stripe from "npm:stripe@17.5.0";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
-  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
