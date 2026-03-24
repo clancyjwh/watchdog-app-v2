@@ -1,8 +1,8 @@
 /**
- * Environment variables for xAI/OpenAI
+ * Environment variables for OpenAI
  */
-const XAI_API_KEY = import.meta.env.VITE_XAI_API_KEY || import.meta.env.VITE_OPENAI_API_KEY || '';
-const XAI_API_URL = import.meta.env.VITE_XAI_API_URL || 'https://api.x.ai/v1/chat/completions';
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 export type TopicSuggestion = {
   topic: string;
@@ -130,35 +130,35 @@ export type CompetitorUrls = {
   };
 };
 
-async function callXAI(prompt: string, temperature: number = 0.3): Promise<string> {
-  if (!XAI_API_KEY) {
-    console.warn('XAI_API_KEY is not defined. AI features will be limited.');
+async function callOpenAI(prompt: string, temperature: number = 0.3): Promise<string> {
+  if (!OPENAI_API_KEY) {
+    console.warn('VITE_OPENAI_API_KEY is not defined. AI features will be limited.');
     return '';
   }
 
   try {
-    const response = await fetch(XAI_API_URL, {
+    const response = await fetch(OPENAI_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${XAI_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-beta',
+        model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         temperature,
       }),
     });
 
     if (!response.ok) {
-      console.error('xAI API error:', response.status, response.statusText);
+      console.error('OpenAI API error:', response.status, response.statusText);
       return '';
     }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content || '';
   } catch (error) {
-    console.error('Error calling xAI:', error);
+    console.error('Error calling OpenAI:', error);
     return '';
   }
 }
@@ -177,7 +177,7 @@ Summary: ${summary}
 Write one clear, descriptive sentence that explains what this article is about. Be concise and focus on the key information a reader would want to know. Return ONLY the sentence, no quotes or extra text.`;
 
   try {
-    const response = await callXAI(prompt, 0.5);
+    const response = await callOpenAI(prompt, 0.5);
     return response.trim() || summary;
   } catch (error) {
     console.error('Error generating article blurb:', error);
@@ -212,7 +212,7 @@ Return ONLY a JSON object: {"score": X, "reasoning": "brief explanation"}
 `;
 
   try {
-    const response = await callXAI(prompt, 0.3);
+    const response = await callOpenAI(prompt, 0.3);
     if (!response) return null;
 
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -238,7 +238,7 @@ Article: ${articleContent.substring(0, 3000)}
 `;
 
   try {
-    const response = await callXAI(prompt, 0.5);
+    const response = await callOpenAI(prompt, 0.5);
     return response || null;
   } catch (error) {
     console.error('Error summarizing article:', error);
@@ -268,7 +268,7 @@ Return ONLY the category name (e.g., "news" or "legislation"), nothing else.
 `;
 
   try {
-    const response = await callXAI(prompt, 0.2);
+    const response = await callOpenAI(prompt, 0.2);
     const category = response.trim().toLowerCase();
 
     const validCategories = ['news', 'legislation', 'grants', 'reports', 'press', 'government', 'competitor'];
@@ -307,7 +307,7 @@ If you cannot find a URL with confidence, use an empty string "".
 `;
 
   try {
-    const response = await callXAI(prompt, 0.3);
+    const response = await callOpenAI(prompt, 0.3);
     if (!response) return null;
 
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -335,7 +335,7 @@ Return ONLY a JSON array of company names: ["Company 1", "Company 2", ...]
 `;
 
   try {
-    const response = await callXAI(prompt, 0.5);
+    const response = await callOpenAI(prompt, 0.5);
     if (!response) return null;
 
     const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -363,7 +363,7 @@ Provide a brief 2-3 sentence analysis of what this competitor is focusing on and
 `;
 
   try {
-    const response = await callXAI(prompt, 0.6);
+    const response = await callOpenAI(prompt, 0.6);
     return response || null;
   } catch (error) {
     console.error('Error analyzing competitor activity:', error);
