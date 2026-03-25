@@ -268,7 +268,8 @@ function getDateOfISOWeek(week: number, year: number): Date {
 export async function triggerScannerWebhook(
   userId: string, 
   frequency: string, 
-  isManual: boolean = false
+  isManual: boolean = false,
+  extraData: any = {}
 ): Promise<boolean> {
   const WEBHOOK_URL = 'https://hook.us2.make.com/pgl69xy425vg3zasl4v0j9qs18ogk9hu';
 
@@ -282,7 +283,8 @@ export async function triggerScannerWebhook(
         user_id: userId,
         frequency: frequency,
         is_manual: isManual,
-        triggered_at: new Date().toISOString()
+        triggered_at: new Date().toISOString(),
+        ...extraData
       }),
     });
 

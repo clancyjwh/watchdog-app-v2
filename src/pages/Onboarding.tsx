@@ -333,18 +333,17 @@ export default function Onboarding() {
     setFinishError('');
 
     try {
-      // Insert topics
+      // 1. Insert topics
       for (const topicName of selectedTopics) {
-        const { error } = await supabase.from('topics').insert({
+        await supabase.from('topics').insert({
           profile_id: profile.id,
           company_id: currentCompany.id,
           topic_name: topicName,
           is_custom: !suggestedTopics.some(s => s.topic === topicName),
         });
-        if (error) throw new Error(`Failed to save topics: ${error.message}`);
       }
 
-      // Insert sources
+      // 2. Insert sources
       const sourcesData = [];
       for (const source of selectedSources) {
         const { data, error } = await supabase.from('sources').insert({
@@ -357,17 +356,21 @@ export default function Onboarding() {
           is_approved: true,
           is_core_source: true,
         }).select();
-        if (error) throw new Error(`Failed to save sources: ${error.message}`);
         if (data) sourcesData.push(data[0]);
       }
 
-      // Insert subscription with actual pricing and 7-day schedule
+      // 3. Give users the credits included in their tier IMMEDIATELY (Fail-safe)
       const tierConfig = getTierConfig(selectedTier);
+      await supabase.from('profiles').update({
+        manual_scan_credits: tierConfig.monthlyCredits,
+      }).eq('id', profile.id);
+
+      // 4. Insert subscription details
       const today = new Date();
       const nextScanDate = new Date();
-      nextScanDate.setDate(today.getDate() + 7); // Changed from 3 to 7
+      nextScanDate.setDate(today.getDate() + 7);
       
-      const { error: subscriptionError } = await supabase.from('watchdog_subscribers').upsert({
+      await supabase.from('watchdog_subscribers').upsert({
         profile_id: profile.id,
         company_id: currentCompany.id,
         tier: selectedTier,
@@ -376,71 +379,15 @@ export default function Onboarding() {
         included_credits: tierConfig.monthlyCredits,
         current_period_end: nextScanDate.toISOString(),
       }, { onConflict: 'profile_id' });
-      if (subscriptionError) throw new Error(`Failed to save subscription details: ${subscriptionError.message}`);
 
-      // Update companies table with next scan date and automated scan tracking
-      await supabase.from('companies').update({
-        next_scan_due_date: nextScanDate.toISOString(),
-        subscription_frequency: frequency,
-        last_automated_scan_date: today.toISOString(),
-      }).eq('id', currentCompany.id);
-
-      // Give users the credits included in their tier
-      const { error: creditsError } = await supabase
-        .from('profiles')
-        .update({
-          manual_scan_credits: tierConfig.monthlyCredits,
-        })
-        .eq('id', profile.id);
-
-      if (creditsError) console.warn('Failed to set initial credits:', creditsError);
-
-      // Update profile with default values
-      // Update company with final settings
-      const { error: companyUpdateError } = await supabase
-        .from('companies')
-        .update({
-          content_types: selectedContentTypes,
-          analysis_depth: 'standard',
-          results_per_scan: resultsPerScan,
-        })
-        .eq('id', currentCompany.id);
-      
-      if (companyUpdateError) throw new Error(`Failed to update company: ${companyUpdateError.message}`);
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          onboarding_completed: true,
-        })
-        .eq('id', profile.id);
-      if (profileError) throw new Error(`Failed to update profile: ${profileError.message}`);
-
-      // Generate mock updates (don't block on this)
-      try {
-        await generateMockUpdates(
-          profile.id,
-          businessDescription,
-          industry,
-          sourcesData,
-          selectedTopics,
-          selectedContentTypes
-        );
-      } catch (mockError) {
-        console.warn('Failed to generate mock updates:', mockError);
-      }
-
-      // Trigger immediate scan for all new signups
+      // 5. Trigger immediate scan before doing complex company updates
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-        const today = new Date().toISOString().split('T')[0];
         const dateFromObj = new Date();
         dateFromObj.setDate(dateFromObj.getDate() - 7);
         const dateFrom = dateFromObj.toISOString().split('T')[0];
 
-        // Fetch initial updates using Perplexity
         const perplexityResponse = await fetch(`${supabaseUrl}/functions/v1/fetch-perplexity-updates`, {
           method: 'POST',
           headers: {
@@ -449,156 +396,107 @@ export default function Onboarding() {
           },
           body: JSON.stringify({
             topics: selectedTopics,
-            sources: sourcesData.map(s => ({
-              name: s.name,
-              url: s.url,
-              rss_feed_url: s.rss_feed_url
-            })),
+            sources: sourcesData.map(s => ({ name: s.name, url: s.url })),
             contentTypes: selectedContentTypes,
-            businessDescription: businessDescription,
-            industry: industry,
+            businessDescription,
+            industry,
             monitoringGoals: monitoringGoals.join(', '),
-            location: [locationCity, locationProvince, locationCountry].filter(Boolean).join(', '),
-            businessContext: businessContext,
             dateFrom,
-            dateTo: today,
-            scanOptions: {
-              depth: 'standard',
-              priority: 'balanced',
-              maxArticles: resultsPerScan,
-              timeRange: '7days'
-            }
+            dateTo: today.toISOString().split('T')[0]
           }),
         });
 
-        if (!perplexityResponse.ok) {
-          const errorData = await perplexityResponse.json().catch(() => ({}));
-          throw new Error(errorData.details || errorData.error || `Initial scan search failed (${perplexityResponse.status})`);
+        if (perplexityResponse.ok) {
+           const perplexityData = await perplexityResponse.json();
+           const allUpdates = perplexityData.updates || [];
+           
+           // If we have updates, trigger receiving them (non-blocking)
+           if (allUpdates.length > 0) {
+              // NOTE: We MUST map the fields correctly to what receive-updates expects
+              const mappedUpdates = allUpdates.map((u: any) => ({
+                title: u.title,
+                content: u.summary || u.title,
+                sourceUrl: u.source_url,
+                originalUrl: u.original_url,
+                timestamp: u.published_at || new Date().toISOString(),
+                relevance_score: u.relevance_score,
+                relevance_reasoning: u.relevance_reasoning,
+                content_type: u.content_type,
+                source_name: u.source_name
+              }));
+
+              fetch(`${supabaseUrl}/functions/v1/receive-updates`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
+                 body: JSON.stringify({ 
+                   userId: user?.id, 
+                   updates: mappedUpdates, 
+                   isManualScan: false 
+                 })
+              }).catch(e => console.warn('Receiving initial updates failed:', e));
+           }
         }
-
-        const perplexityData = await perplexityResponse.json();
-        const allUpdates = perplexityData.updates || [];
-
-        // Monitor monitored sources if any
-        if (sourcesData.length > 0) {
-          const monitorResponse = await fetch(`${supabaseUrl}/functions/v1/monitor-tracked-sources`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseAnonKey}`,
-            },
-            body: JSON.stringify({
-              profileId: profile.id,
-            }),
-          });
-
-          if (monitorResponse.ok) {
-            const monitorData = await monitorResponse.json();
-            if (monitorData.updates && monitorData.updates.length > 0) {
-              allUpdates.push(...monitorData.updates);
-            }
-          }
-        }
-
-        // Save all updates to the database
-        if (allUpdates.length > 0) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await fetch(`${supabaseUrl}/functions/v1/receive-updates`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseAnonKey}`,
-              },
-              body: JSON.stringify({
-                userId: user.id,
-                updates: allUpdates,
-                isManualScan: false
-              }),
-            });
-          }
-        }
-
-        // Trigger background research generation (don't wait)
-        const researchTopics = selectedTopics.map(t => ({ topic: t, tags: [] }));
-
-        fetch(`${supabaseUrl}/functions/v1/generate-background-research`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
-            profileId: profile.id,
-            topics: researchTopics,
-            depth: 'standard',
-          }),
-        }).catch(err => console.warn('Background research failed:', err));
       } catch (scanError) {
-        console.warn('Failed to run initial scan:', scanError);
+        console.warn('Initial scan trigger failed (continuing to dashboard):', scanError);
       }
 
-      // Create Stripe customer after onboarding is complete
+      // 6. Update company settings (Fail-safe in case of schema issues)
+      try {
+        await supabase.from('companies').update({
+          next_scan_due_date: nextScanDate.toISOString(),
+          subscription_frequency: frequency,
+          last_automated_scan_date: today.toISOString(),
+          content_types: selectedContentTypes,
+          analysis_depth: 'standard',
+          results_per_scan: resultsPerScan,
+        }).eq('id', currentCompany.id);
+      } catch (companyError) {
+        console.warn('Failed to update company settings (non-fatal):', companyError);
+      }
+
+      // 7. Complete onboarding
+      await supabase.from('profiles').update({
+        onboarding_completed: true,
+      }).eq('id', profile.id);
+
+      // 8. Secondary Features (Non-blocking / Fail-safe)
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-        const customerResponse = await fetch(`${supabaseUrl}/functions/v1/create-stripe-customer`, {
+        // Create Stripe Customer
+        fetch(`${supabaseUrl}/functions/v1/create-stripe-customer`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
-            user_id: user?.id,
-            email: profile.email,
-            name: profile.full_name,
-          }),
-        });
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
+          body: JSON.stringify({ user_id: user?.id, email: profile.email, name: profile.full_name }),
+        }).catch(e => console.warn('Stripe customer creation failed:', e));
 
-        const customerData = await customerResponse.json();
-        if (!customerData.success && !customerData.skipped) {
-          console.warn('Failed to create Stripe customer:', customerData.error);
-        } else if (customerData.success) {
-          console.log('Stripe customer created successfully');
-        }
-      } catch (stripeError) {
-        console.warn('Failed to create Stripe customer (non-fatal):', stripeError);
-      }
-
-      // Send webhook notification to Make.com
-      try {
-        await fetch('https://hook.us2.make.com/adu8oln2b5ghzhy2bmm76flmgh1neao2', {
+        // Send Make.com Webhook Notification
+        fetch('https://hook.us2.make.com/adu8oln2b5ghzhy2bmm76flmgh1neao2', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             full_name: profile.full_name,
             email: profile.email,
             company_name: companyName,
             industry: industry,
-            description: businessDescription,
-            monitoring_goals: monitoringGoals.join(', '),
-            location: [locationCity, locationProvince, locationCountry].filter(Boolean).join(', '),
             tier: selectedTier,
-            sources_count: selectedSources.length,
-            topics_count: selectedTopics.length,
             timestamp: new Date().toISOString()
           }),
-        });
-      } catch (webhookError) {
-        console.warn('Failed to send webhook notification (non-fatal):', webhookError);
+        }).catch(e => console.warn('Make.com webhook failed:', e));
+
+        // Trigger Enterprise scanner if needed
+        if (selectedTier === 'enterprise' && user) {
+          triggerScannerWebhook(user.id, frequency).catch(e => console.warn('Enterprise scanner trigger failed:', e));
+        }
+      } catch (secondaryError) {
+        console.warn('Secondary features caught error:', secondaryError);
       }
 
       await refreshProfile();
-      // Trigger Enterprise scanner if needed
-      if (selectedTier === 'enterprise') {
-        await triggerScannerWebhook(user.id, frequency);
-      }
-
       clearOnboardingState();
       navigate('/dashboard');
+
     } catch (error) {
       console.error('Error completing onboarding:', error);
       setFinishError(error instanceof Error ? error.message : 'Failed to complete setup. Please try again.');

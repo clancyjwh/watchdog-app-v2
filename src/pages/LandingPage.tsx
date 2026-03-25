@@ -44,7 +44,7 @@ export default function LandingPage() {
       credits: 100,
       scans: 4,
       features: [
-        '3-day free trial included',
+        '7-day free trial included',
         '100 manual scan credits/month',
         'AI relevance scoring',
         'Dashboard delivery',
@@ -59,7 +59,7 @@ export default function LandingPage() {
       credits: 300,
       scans: 12,
       features: [
-        '3-day free trial included',
+        '7-day free trial included',
         '300 manual scan credits/month',
         'AI relevance scoring',
         'Dashboard delivery',
@@ -75,7 +75,7 @@ export default function LandingPage() {
       credits: 600,
       scans: 24,
       features: [
-        '3-day free trial included',
+        '7-day free trial included',
         '600 manual scan credits/month',
         'AI relevance scoring',
         'Dashboard delivery',
@@ -151,7 +151,7 @@ export default function LandingPage() {
                   Get Started
                   <ArrowRight className="inline-block ml-2 w-5 h-5" />
                 </button>
-                <span className="text-sm text-gray-600">3 day free trial</span>
+                <span className="text-sm text-gray-600">7 day free trial</span>
               </div>
               <button
                 onClick={() => {
@@ -247,7 +247,7 @@ export default function LandingPage() {
               Simple, transparent pricing
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Choose the update frequency that works for you. All plans include a 3-day free trial.
+              Choose the update frequency that works for you. All plans include a 7-day free trial.
             </p>
           </div>
 

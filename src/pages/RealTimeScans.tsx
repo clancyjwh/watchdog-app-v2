@@ -53,13 +53,16 @@ export default function RealTimeScans() {
     setScanLoading(true);
 
     try {
-      // Use RPC but we know admin logic is handled in edge function or DB trigger usually
-      // For UI, we already checked effectiveCredits in the button disabled state
+      // We checked effectiveCredits in the button disabled state,
+      // but we still try to decrement it in the DB
       const { data: newBalance, error: spendError } = await supabase
         .rpc('spend_manual_scan_credits', { cost: 25 });
 
       if (spendError && !isAdmin) {
-        alert('Not enough credits. Please upgrade or purchase more credits.');
+        console.error('RPC spend_manual_scan_credits failed:', spendError);
+        // Display the actual error from the DB if available (e.g. "Insufficient credits. You have 10 but need 25")
+        const errorMsg = spendError.message || 'Not enough credits. Please upgrade or purchase more credits.';
+        alert(errorMsg);
         setScanLoading(false);
         return;
       }
@@ -103,8 +106,22 @@ export default function RealTimeScans() {
       });
 
       if (response.ok) {
-        // Trigger the manual scan webhook
-        await triggerScannerWebhook(user.id, currentCompany?.subscription_frequency || 'weekly', true);
+        // Trigger the manual scan webhook with full profile info
+        await triggerScannerWebhook(
+          user.id, 
+          currentCompany?.subscription_frequency || 'weekly', 
+          true,
+          {
+            company_name: currentCompany?.name,
+            industry: currentCompany?.industry,
+            description: currentCompany?.description,
+            monitoring_goals: currentCompany?.monitoring_goals,
+            topics: topics,
+            full_name: profile?.full_name,
+            email: profile?.email,
+            location: `${currentCompany?.location_city}, ${currentCompany?.location_province}, ${currentCompany?.location_country}`
+          }
+        );
         await loadScanSummaries();
         alert('Manual Research Scan Complete! New articles added to feed.');
       } else {
