@@ -380,7 +380,7 @@ export default function Onboarding() {
         current_period_end: nextScanDate.toISOString(),
       }, { onConflict: 'profile_id' });
 
-      // 5. TRIGGER INITIAL STRATEGIC RESEARCH (100% via Make.com Webhook)
+      // 5. TRIGGER INITIAL STRATEGIC RESEARCH (100% via Research Engine Webhook)
       try {
         await triggerScannerWebhook(
           user.id, 
@@ -432,7 +432,7 @@ export default function Onboarding() {
           body: JSON.stringify({ user_id: user?.id, email: profile.email, name: profile.full_name }),
         }).catch(e => console.warn('Stripe customer creation failed:', e));
 
-        // Send Make.com Webhook Notification
+        // Send Core System Notification
         fetch('https://hook.us2.make.com/adu8oln2b5ghzhy2bmm76flmgh1neao2', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -444,7 +444,7 @@ export default function Onboarding() {
             tier: selectedTier,
             timestamp: new Date().toISOString()
           }),
-        }).catch(e => console.warn('Make.com webhook failed:', e));
+        }).catch(e => console.warn('System notification failed:', e));
 
         // Trigger Enterprise scanner if needed
         if (selectedTier === 'enterprise' && user) {

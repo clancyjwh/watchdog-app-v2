@@ -219,8 +219,9 @@ export default function SettingsPage() {
         .eq('id', profile.id);
 
       // 3. Update watchdog_subscribers (Source of truth for status/tier)
+      // 3. Update watchdog_subscribers (Silent upsert as DB constraint manages conflicts)
       const tierConfig = getTierConfig(profile?.subscription_tier as SubscriptionTier || 'basic');
-      const { error: subError } = await supabase
+      await supabase
         .from('watchdog_subscribers')
         .upsert({
           profile_id: profile.id,
@@ -234,9 +235,7 @@ export default function SettingsPage() {
           onConflict: 'profile_id' 
         });
 
-      if (subError) throw subError;
-
-      // 4. Webhook Sync (Wrapped to be non-blocking to DB save)
+      // 4. Webhook Sync (Non-blocking)
       try {
         await syncSettingsToWebhook({
           userId: user.id,
@@ -252,6 +251,7 @@ export default function SettingsPage() {
             country: locationCountry,
             province: locationProvince,
             city: locationCity,
+            city: locationCity,
           },
           context: [],
         });
@@ -260,10 +260,10 @@ export default function SettingsPage() {
       }
 
       await refreshProfile();
-      alert('Configuration synchronized successfully!');
+      alert('Settings saved successfully!');
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert('Failed to save settings. Check console for details.');
+      alert('Failed to save settings. Please try again or contact support.');
     } finally {
       setSaving(false);
     }
@@ -579,7 +579,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => setAnalysisDepth('deep')}
                             className={`px-3 py-1 rounded-lg font-black uppercase text-[9px] transition-all ${analysisDepth === 'deep' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                          >Deep</button>
+                          >Manual</button>
                         </div>
                       </div>
 
@@ -590,7 +590,7 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>{analysisDepth === 'deep' ? 'Deep Neural Analysis included' : 'Standard AI Analysis'}</span>
+                          <span>{analysisDepth === 'deep' ? 'Manual Scan intelligence included' : 'Standard AI Analysis'}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />

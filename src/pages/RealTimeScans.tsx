@@ -45,8 +45,36 @@ export default function RealTimeScans() {
   useEffect(() => {
     if (profile?.id && !authLoading) {
       loadScanSummaries();
+
+      // Subscribe to real-time updates for new research reports
+      const channel = supabase
+        .channel('scan_summaries_updates')
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'scan_summaries',
+          filter: `profile_id=eq.${profile.id}`
+        }, async (payload) => {
+          console.log('New research report received:', payload.new);
+          await loadScanSummaries();
+          setScanLoading(false);
+          // Reset scanning state in database
+          if (currentCompany?.id) {
+            await supabase.from('companies').update({ is_scanning: false }).eq('id', currentCompany.id);
+          }
+        })
+        .subscribe();
+
+      // Sync local loading state with database is_scanning flag
+      if (currentCompany?.is_scanning) {
+        setScanLoading(true);
+      }
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [profile?.id, authLoading]);
+  }, [profile?.id, currentCompany?.id, authLoading]);
 
   const runManualScan = async () => {
     if (!profile?.id || !user?.id) return;
@@ -83,8 +111,9 @@ export default function RealTimeScans() {
 
       const today = new Date().toISOString().split('T')[0];
       
-      // TRIGGER THE MAKE.COM AUTOMATION (Handles 100% of the research logic)
-      await triggerScannerWebhook(
+      // TRIGGER THE RESEARCH ENGINE (Handles 100% of the research logic)
+      // Non-blocking call to allow the user to navigate away while it runs in background
+      triggerScannerWebhook(
         user.id, 
         currentCompany?.subscription_frequency || 'weekly', 
         true,
@@ -98,10 +127,13 @@ export default function RealTimeScans() {
           email: profile?.email,
           location: `${currentCompany?.location_city}, ${currentCompany?.location_province}, ${currentCompany?.location_country}`
         }
-      );
+      ).catch(err => console.error('Webhook trigger background error:', err));
 
-      // Success feedback (Since research is async on the backend)
-      alert('Research Initialized! Your Make.com automation is now conducting the search. New articles will appear in your feed shortly.');
+      // Update company state to show scanning in progress (survives refresh)
+      await supabase.from('companies').update({ is_scanning: true }).eq('id', currentCompany.id);
+
+      // Success feedback
+      alert('Research Initialized! Our autonomous agents are now conducting the search. You can navigate away and the results will appear here automatically when ready.');
       
       await loadScanSummaries();
     } catch (error) {
@@ -132,7 +164,7 @@ export default function RealTimeScans() {
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
               <Zap className="w-6 h-6 text-indigo-600 fill-indigo-600" />
-              Strategic Research
+              Manual Scan
             </h1>
             <p className="text-sm text-slate-500 font-medium mt-1">
               On-demand AI analysis into your core areas of interest
@@ -172,9 +204,9 @@ export default function RealTimeScans() {
                  <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-100">
                     <Zap className="w-10 h-10 text-indigo-600" />
                  </div>
-                 <h2 className="text-xl font-bold text-slate-900">No Research Reports</h2>
+                 <h2 className="text-xl font-bold text-slate-900">No Manual Scans</h2>
                  <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-                    Initialize your first manual research scan to uncover insights across the web tailored to your business goals.
+                    Initialize your first scan to uncover insights across the web tailored to your business goals.
                  </p>
               </div>
             ) : (
@@ -249,11 +281,25 @@ export default function RealTimeScans() {
                                 ?.sort((a: any, b: any) => (b.relevance_score || 0) - (a.relevance_score || 0))
                                 ?.slice(0, currentCompany?.results_per_scan || 5)
                                 ?.map((cit: any, i: number) => (
-                                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 transition-all hover:shadow-sm techny-border">
-                                   <div className="flex items-start justify-between gap-4">
+                                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 hover:border-indigo-300 transition-all hover:shadow-sm text-left">
+                                   <div className="flex items-start justify-between gap-6">
                                       <div className="flex-1">
-                                         <h5 className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                            {cit.title}
+                                         <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-[9px] font-black px-2 py-0.5 bg-slate-100 text-slate-500 rounded uppercase tracking-widest text-[8px]">
+                                               {cit.content_type || 'intelligence'}
+                                            </span>
+                                            {cit.primary_label && (
+                                               <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest text-[8px] ${
+                                                  cit.primary_label.toLowerCase() === 'risk' ? 'bg-rose-50 text-rose-600' : 
+                                                  cit.primary_label.toLowerCase() === 'opportunity' ? 'bg-emerald-50 text-emerald-600' : 
+                                                  'bg-indigo-50 text-indigo-600'
+                                               }`}>
+                                                  {cit.primary_label}
+                                               </span>
+                                            )}
+                                         </div>
+                                         <h5 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight">
+                                            {cit.headline || cit.title}
                                          </h5>
                                          <p className="text-xs text-slate-500 mt-2 line-clamp-2">
                                             {cit.summary}

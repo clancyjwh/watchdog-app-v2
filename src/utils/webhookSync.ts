@@ -1,5 +1,5 @@
 /**
- * Syncs user settings and company profile with the external webhook (Make.com)
+ * Syncs user settings and company profile with the external Research Engine
  */
 export async function syncSettingsToWebhook(payload: {
   userId: string;
