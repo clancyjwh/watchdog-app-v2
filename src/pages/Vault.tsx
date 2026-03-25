@@ -319,7 +319,7 @@ export default function Vault() {
                                onClick={(e) => e.stopPropagation()}
                                className="flex items-center gap-2 text-[10px] font-black text-blue-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
                              >
-                               Extract Original
+                               Visit
                                <ExternalLink className="w-3 h-3" />
                              </a>
                            ) : (

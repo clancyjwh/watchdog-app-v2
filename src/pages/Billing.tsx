@@ -142,13 +142,6 @@ export default function Billing() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleManageBilling}
-                  disabled={processingCheckout || !subscription?.stripe_customer_id}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50"
-                >
-                  {processingCheckout ? 'Redirecting...' : 'Access Customer Portal'}
-                </button>
               </div>
 
               {/* Quick Top up */}
@@ -158,7 +151,7 @@ export default function Billing() {
                   {[
                     { amt: 100, price: '$25' },
                     { amt: 300, price: '$65' },
-                    { amt: 1000, price: '$195' },
+                    { amt: 1000, price: '$175' },
                   ].map(pkg => (
                     <button
                       key={pkg.amt}

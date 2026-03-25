@@ -48,27 +48,30 @@ export default function Updates() {
 
   // Countdown Logic
   useEffect(() => {
-    if (!currentCompany?.next_scan_due_date) return;
+    if (!currentCompany?.created_at) return;
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
-      const target = new Date(currentCompany.next_scan_due_date).getTime();
-      const diff = target - now;
-
-      if (diff <= 0) {
-        setCountdown('Scan Imminent');
-        return;
+      const creationDate = new Date(currentCompany.created_at).getTime();
+      
+      const cycleTime = 7 * 24 * 60 * 60 * 1000;
+      let nextScan = creationDate + cycleTime;
+      
+      while (nextScan <= now) {
+        nextScan += cycleTime;
       }
 
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      const diff = nextScan - now;
 
-      setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+      setCountdown(`${days}d ${hours}h ${minutes}m`);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [currentCompany?.next_scan_due_date]);
+  }, [currentCompany?.created_at]);
 
   const loadIntelligence = async () => {
     if (!profile?.id) return;
@@ -303,7 +306,7 @@ export default function Updates() {
                               <Share2 className="w-4 h-4" />
                             </button>
                             <a href={article.url} target="_blank" rel="noopener noreferrer" className="px-6 py-2 bg-slate-100 text-slate-950 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-xl hover:shadow-blue-500/20 active:scale-95">
-                              Extract Intelligence
+                              Visit
                             </a>
                           </div>
                         </div>
