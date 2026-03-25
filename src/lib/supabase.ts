@@ -125,6 +125,7 @@ export type Update = {
   content_type: string;
   is_read: boolean;
   is_saved: boolean;
+  is_favourite: boolean;
   delivery_batch: string;
   published_at: string;
   created_at: string;
@@ -174,6 +175,7 @@ export type ScanSummary = {
   social_sentiment: string | null;
   scan_date: string;
   is_read: boolean;
+  is_favourite: boolean;
   created_at: string;
 };
 

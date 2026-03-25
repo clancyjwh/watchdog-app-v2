@@ -1,411 +1,282 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase, Update } from '../lib/supabase';
-import {
-  Activity, Search, LogOut, Settings, CreditCard,
-  BarChart3, Zap, Filter, Heart, Trash2, Monitor, FileText
+import { supabase } from '../lib/supabase';
+import { 
+  Heart, Search, Info, ExternalLink, Activity, 
+  Layers, Clock, Filter, Globe, Sparkles,
+  ChevronDown, ChevronUp, Zap, FileText, CheckCircle2,
+  Star
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { getFrequencyLabel } from '../utils/pricing';
-import StarRating from '../components/StarRating';
-import ContentTag from '../components/ContentTag';
+import Sidebar from '../components/Sidebar';
+import RelevanceModal from '../components/RelevanceModal';
+import CompanySwitcher from '../components/CompanySwitcher';
+
+interface FavouriteItem {
+  id: string;
+  title: string;
+  summary: string;
+  url: string | null;
+  source: string;
+  date: string;
+  relevanceScore: number;
+  relevanceReasoning: string;
+  contentType: string;
+  isFavourite: boolean;
+  itemType: 'automated' | 'manual';
+  raw_data?: any;
+}
 
 export default function Favourites() {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-
-  const [updates, setUpdates] = useState<Update[]>([]);
+  const { profile, currentCompany, authLoading } = useAuth();
+  const [items, setItems] = useState<FavouriteItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<FavouriteItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSource, setSelectedSource] = useState<string>('all');
-  const [minRelevance, setMinRelevance] = useState(1);
-  const [sortBy, setSortBy] = useState<'newest' | 'relevance-high' | 'relevance-low'>('newest');
-  const [showFilters, setShowFilters] = useState(false);
+  const [expandedManualId, setExpandedManualId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile?.id) {
+    if (profile?.id && !authLoading) {
       loadFavourites();
     }
-  }, [profile]);
+  }, [profile?.id, currentCompany?.id, authLoading]);
 
   const loadFavourites = async () => {
     if (!profile?.id) return;
+    setLoading(true);
 
     try {
-      const response = await supabase
+      // 1. Fetch Favourited Automated Updates
+      let updatesQuery = supabase
         .from('updates')
         .select('*')
-        .eq('profile_id', profile.id)
-        .eq('is_saved', true)
-        .order('published_at', { ascending: false });
+        .eq('is_favourite', true);
+      
+      if (currentCompany?.id) {
+        updatesQuery = updatesQuery.eq('company_id', currentCompany.id);
+      } else {
+        updatesQuery = updatesQuery.eq('profile_id', profile.id);
+      }
 
-      setUpdates(response.data || []);
-    } catch (error) {
-      console.error('Error loading favourites:', error);
+      // 2. Fetch Favourited Manual Scan Summaries
+      let scansQuery = supabase
+        .from('scan_summaries')
+        .select('*')
+        .eq('is_favourite', true);
+
+      if (currentCompany?.id) {
+        scansQuery = scansQuery.eq('company_id', currentCompany.id);
+      } else {
+        scansQuery = scansQuery.eq('profile_id', profile.id);
+      }
+
+      const [updatesRes, scansRes] = await Promise.all([updatesQuery, scansQuery]);
+
+      if (updatesRes.error) throw updatesRes.error;
+      if (scansRes.error) throw scansRes.error;
+
+      const automatedItems: FavouriteItem[] = (updatesRes.data || []).map(u => ({
+        id: u.id,
+        title: u.title,
+        summary: u.summary,
+        url: u.url,
+        source: u.source_name || 'Automated Feed',
+        date: u.published_at || u.created_at,
+        relevanceScore: u.relevance_score || 0,
+        relevanceReasoning: u.relevance_reasoning || '',
+        contentType: u.content_type || 'intelligence',
+        isFavourite: true,
+        itemType: 'automated'
+      }));
+
+      const manualItems: FavouriteItem[] = (scansRes.data || []).map(s => ({
+        id: s.id,
+        title: `Deep Research Report: ${new Date(s.scan_date).toLocaleDateString()}`,
+        summary: s.overview,
+        url: null,
+        source: 'Deep Research',
+        date: s.scan_date,
+        relevanceScore: 100,
+        relevanceReasoning: 'Strategic intelligence report marked for priority review.',
+        contentType: s.content_type || 'strategic-report',
+        isFavourite: true,
+        itemType: 'manual',
+        raw_data: s
+      }));
+
+      const combined = [...automatedItems, ...manualItems].sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      setItems(combined);
+    } catch (err) {
+      console.error('Failed to load favourites:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
-
-  const toggleSaveUpdate = async (updateId: string) => {
+  const removeFavourite = async (item: FavouriteItem) => {
     try {
-      await supabase
-        .from('updates')
-        .update({ is_saved: false })
-        .eq('id', updateId);
-
-      setUpdates(prev => prev.filter(u => u.id !== updateId));
-    } catch (error) {
-      console.error('Error removing from favourites:', error);
+      const table = item.itemType === 'automated' ? 'updates' : 'scan_summaries';
+      const { error } = await supabase
+        .from(table)
+        .update({ is_favourite: false })
+        .eq('id', item.id);
+      
+      if (error) throw error;
+      setItems(prev => prev.filter(i => i.id !== item.id));
+    } catch (err) {
+      console.error('Error removing favourite:', err);
     }
   };
 
-  const deleteUpdate = async (updateId: string) => {
-    try {
-      await supabase
-        .from('updates')
-        .delete()
-        .eq('id', updateId);
-
-      setUpdates(prev => prev.filter(u => u.id !== updateId));
-    } catch (error) {
-      console.error('Error deleting update:', error);
-    }
-  };
-
-  const markAsRead = async (updateId: string) => {
-    try {
-      await supabase
-        .from('updates')
-        .update({ is_read: true })
-        .eq('id', updateId);
-
-      setUpdates(prev => prev.map(u =>
-        u.id === updateId ? { ...u, is_read: true } : u
-      ));
-    } catch (error) {
-      console.error('Error marking as read:', error);
-    }
-  };
-
-  const getContentTypeLabel = (contentType: string) => {
-    const labels: Record<string, string> = {
-      news: 'News',
-      legislation: 'Legislation',
-      grants: 'Grant',
-      reports: 'Report',
-      press: 'Press Release',
-      government: 'Government',
-      competitor: 'Competitor',
-    };
-    return labels[contentType] || contentType;
-  };
-
-  const filterUpdates = (updatesToFilter: Update[]) => {
-    return updatesToFilter.filter((update) => {
-      const matchesSearch =
-        searchQuery === '' ||
-        update.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        update.summary.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRelevance = update.relevance_score >= minRelevance;
-      const matchesSource = selectedSource === 'all' || update.source_name === selectedSource;
-
-      return matchesSearch && matchesRelevance && matchesSource;
-    });
-  };
-
-  const sortUpdates = (updatesToSort: Update[]) => {
-    if (sortBy === 'relevance-high') {
-      return [...updatesToSort].sort((a, b) => b.relevance_score - a.relevance_score);
-    } else if (sortBy === 'relevance-low') {
-      return [...updatesToSort].sort((a, b) => a.relevance_score - b.relevance_score);
-    } else {
-      return [...updatesToSort].sort((a, b) =>
-        new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
-      );
-    }
-  };
-
-  const filteredUpdates = sortUpdates(filterUpdates(updates));
-  const sources = Array.from(new Set(updates.map(u => u.source_name).filter(Boolean)));
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit' });
-  };
-
-  const unreadCount = updates.filter(u => !u.is_read).length;
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mb-4"></div>
-          <p className="text-sm text-gray-600">Loading favourites...</p>
-        </div>
-      </div>
+  const filteredItems = useMemo(() => {
+    return items.filter(a => 
+      a.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      a.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.summary.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }
+  }, [items, searchQuery]);
+
+  if (authLoading) return null;
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="flex h-screen overflow-hidden">
-        {/* Left Sidebar */}
-        <div className="w-56 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div className="p-5 border-b border-gray-200">
-            <div className="flex items-center gap-2 mb-5">
-              <Activity className="w-5 h-5 text-gray-900" />
-              <h1 className="text-lg font-bold text-gray-900">WatchDog AI</h1>
+    <div className="flex bg-[#020617] min-h-screen text-slate-200 font-sans overflow-hidden">
+      <Sidebar activePage="favourites" />
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-500/5 blur-[120px] rounded-full pointer-events-none" />
+        
+        <header className="px-8 h-24 bg-slate-900/50 backdrop-blur-md border-b border-slate-800/50 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20 shadow-xl">
+              <Heart className="w-6 h-6 text-red-500 fill-red-500" />
             </div>
-
-            <div className="bg-white border border-gray-200 p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-7 h-7 bg-gray-900 flex items-center justify-center text-white text-xs font-bold">
-                  {user?.email?.[0].toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{profile?.company_name || 'User'}</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">{getFrequencyLabel(profile?.subscription_frequency || 'weekly')}</p>
-            </div>
-          </div>
-
-          <nav className="flex-1 p-3 space-y-0.5">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 font-medium"
-            >
-              <BarChart3 className="w-4 h-4" />
-              Updates
-            </button>
-            <button
-              onClick={() => navigate('/scans')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 font-medium"
-            >
-              <Zap className="w-4 h-4" />
-              Research
-            </button>
-            <button
-              onClick={() => navigate('/tracked-sources')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 font-medium"
-            >
-              <Monitor className="w-4 h-4" />
-              Monitored Sources
-            </button>
-            <button
-              onClick={() => navigate('/favourites')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm bg-gray-900 text-white font-medium"
-            >
-              <Heart className="w-4 h-4" />
-              Favourites
-            </button>
-            <button
-              onClick={() => navigate('/settings')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 font-medium"
-            >
-              <Settings className="w-4 h-4" />
-              Settings
-            </button>
-            <button
-              onClick={() => navigate('/billing')}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 font-medium"
-            >
-              <CreditCard className="w-4 h-4" />
-              Billing
-            </button>
-          </nav>
-
-          <div className="p-3 border-t border-gray-200">
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="bg-white border-b border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Favourites</h2>
-                {unreadCount > 0 && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    <span className="font-semibold text-gray-900">{unreadCount} unread</span> article{unreadCount !== 1 ? 's' : ''}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Collapsible Filter Bar */}
             <div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors mb-3"
-              >
-                <Filter className="w-4 h-4" />
-                Filters
-                {showFilters ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-
-              {showFilters && (
-                <div className="flex items-center gap-2 pb-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search articles..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <select
-                    value={selectedSource}
-                    onChange={(e) => setSelectedSource(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Sources</option>
-                    {sources.map(source => (
-                      <option key={source} value={source}>{source}</option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={minRelevance}
-                    onChange={(e) => setMinRelevance(Number(e.target.value))}
-                    className="px-3 py-2 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="1">All Scores</option>
-                    <option value="5">5+ Score</option>
-                    <option value="7">7+ Score</option>
-                    <option value="9">9+ Score</option>
-                  </select>
-
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as 'newest' | 'relevance-high' | 'relevance-low')}
-                    className="px-3 py-2 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="newest">Most Recent</option>
-                    <option value="relevance-high">Relevance: High to Low</option>
-                    <option value="relevance-low">Relevance: Low to High</option>
-                  </select>
-                </div>
-              )}
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 leading-none">
+                Favourites
+              </h1>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">
+                Priority Intelligence
+              </p>
             </div>
           </div>
 
-          {/* Results List */}
-          <div className="flex-1 overflow-auto bg-gray-50">
-            <div className="p-6 max-w-6xl mx-auto">
-              {filteredUpdates.length === 0 ? (
-                <div className="bg-white border border-gray-200 p-12 text-center">
-                  <div className="inline-flex items-center justify-center w-14 h-14 bg-gray-100 mb-4">
-                    <Heart className="w-7 h-7 text-gray-400" />
-                  </div>
-                  <h3 className="text-base text-gray-900 mb-2">
-                    {updates.length === 0 ? 'No favourites yet' : 'No matching results'}
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    {updates.length === 0
-                      ? 'Articles you favourite will appear here.'
-                      : 'Try adjusting your filters to see more results.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {filteredUpdates.map((update) => (
-                    <div
-                      key={update.id}
-                      className="bg-white border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <h2 className="text-2xl font-bold text-gray-900 leading-tight flex-1">
-                          {update.title}
-                        </h2>
-                        {update.content_type && (
-                          <ContentTag contentType={update.content_type} size="md" />
-                        )}
-                      </div>
+          <div className="flex items-center gap-6">
+            <CompanySwitcher />
+          </div>
+        </header>
 
-                      <div className="mb-6">
-                        <p className="text-sm font-bold text-gray-900 mb-2">Summary:</p>
-                        <p className="text-base text-gray-700 leading-relaxed">
-                          {update.summary}
-                        </p>
-                      </div>
-
-                      {update.relevance_reasoning && (
-                        <div className="mb-6">
-                          <p className="text-sm font-bold text-gray-900 mb-2">Why it matters:</p>
-                          <p className="text-base text-gray-700 leading-relaxed">
-                            {update.relevance_reasoning}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="mb-6">
-                        <StarRating
-                          sourceUrl={update.source_url}
-                          sourceName={update.source_name}
-                          updateId={update.id}
-                          size="md"
-                        />
-                      </div>
-
-                      <div className="mb-6">
-                        <p className="text-sm font-bold text-gray-900 mb-1">Date:</p>
-                        <p className="text-base text-gray-700">{formatDate(update.published_at)}</p>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                        <a
-                          href={update.original_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                          <FileText className="w-4 h-4" />
-                          Read Full Article
-                        </a>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => toggleSaveUpdate(update.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 transition-colors"
-                            title="Remove from Favourites"
-                          >
-                            <Heart className="w-5 h-5 fill-current" />
-                          </button>
-                          <button
-                            onClick={() => deleteUpdate(update.id)}
-                            className="p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
-                            title="Remove article"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="h-16 border-b border-slate-800/30 flex items-center px-8 bg-slate-900/30 backdrop-blur-sm z-10">
+          <div className="flex-1 relative flex items-center">
+            <Search className="absolute left-0 w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Searching priority records..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-300 pl-7 placeholder:text-slate-600 outline-none"
+            />
           </div>
         </div>
-      </div>
+
+        <div className="flex-1 overflow-y-auto px-8 py-10 custom-scrollbar">
+          <div className="max-w-6xl mx-auto pb-32">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-40 gap-4">
+                 <div className="w-12 h-12 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+                 <p className="text-slate-500 font-black uppercase tracking-widest animate-pulse">Syncing Priority Feed...</p>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="glass-card border-dashed border-2 border-slate-800/50 bg-slate-900/20 rounded-[40px] p-32 text-center">
+                 <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-[32px] flex items-center justify-center mx-auto mb-8 shadow-2xl">
+                    <Star className="w-12 h-12 text-slate-800" />
+                 </div>
+                 <h2 className="text-2xl font-bold text-white mb-3">No Favourites Yet</h2>
+                 <p className="text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed font-medium">
+                    Mark critical findings with a heart to preserve them in this priority repository.
+                 </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    className={`glass-card group relative p-8 border transition-all duration-300 bg-slate-900/40 border-slate-800/50 hover:border-blue-500/30 flex flex-col`}
+                  >
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-[0.2em] border ${
+                          item.itemType === 'manual' ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          {item.source}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                          {new Date(item.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      
+                      <button 
+                        onClick={() => removeFavourite(item)}
+                        className="p-2.5 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all border border-red-500/20"
+                      >
+                        <Heart className="w-4 h-4 fill-red-500" />
+                      </button>
+                    </div>
+
+                    <h3 className="text-xl font-bold leading-tight mb-4 text-white group-hover:text-blue-400 transition-colors">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 flex-1">
+                      {item.summary}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-6 border-t border-slate-800/50">
+                       <button
+                         onClick={() => setSelectedItem(item)}
+                         className="flex items-center gap-2 text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
+                       >
+                         <Info className="w-4 h-4" />
+                         Analysis
+                       </button>
+                       
+                       {item.url ? (
+                         <a 
+                           href={item.url} 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           className="flex items-center gap-2 text-[10px] font-black text-blue-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                         >
+                           Source
+                           <ExternalLink className="w-3.5 h-3.5" />
+                         </a>
+                       ) : (
+                         <button 
+                           onClick={() => navigate('/scans')}
+                           className="flex items-center gap-2 text-[10px] font-black text-blue-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                         >
+                           View Scan
+                           <Activity className="w-3.5 h-3.5" />
+                         </button>
+                       )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {selectedItem && (
+        <RelevanceModal
+          isOpen={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+          title={selectedItem.title}
+          relevanceScore={selectedItem.relevanceScore}
+          reasoning={selectedItem.relevanceReasoning}
+        />
+      )}
     </div>
   );
 }

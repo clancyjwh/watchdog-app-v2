@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -6,8 +6,9 @@ import { getSourceSuggestions } from '../utils/mockAI'; // getTopicSuggestions r
 import { getTopicSuggestionsFromAI, getSourceSuggestionsFromAI, SourceSuggestion } from '../utils/perplexity';
 import { getTopicSuggestions, generateTopicSuggestions, TopicSuggestion } from '../utils/openai'; // getTopicSuggestions and TopicSuggestion added here
 import { generateMockUpdates } from '../utils/mockUpdates';
-import { Activity, Check, ChevronRight, ChevronLeft, Plus, Minus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, Building2, Briefcase, AlertCircle, Zap, Info } from 'lucide-react'; // Info added here
+import { Activity, Check, ChevronRight, ChevronLeft, Zap, AlertCircle, DollarSign, DollarSign as Grant, CreditCard, Shield, Plus, Minus, X, Info, Building2, Briefcase, FileText, Newspaper } from 'lucide-react';
 import { formatCurrency, TIER_CONFIGS, SubscriptionTier, getTierConfig, triggerScannerWebhook } from '../utils/pricing';
+import Sidebar from '../components/Sidebar';
 
 // Stripe Elements and loadStripe removed in favor of direct Payment Links
 
@@ -67,30 +68,21 @@ export default function Onboarding() {
   const [businessDescription, setBusinessDescription] = useState('');
   const [industry, setIndustry] = useState('');
   const [monitoringGoals, setMonitoringGoals] = useState<string[]>([]);
-
-  const [locationCountry, setLocationCountry] = useState('');
-  const [locationProvince, setLocationProvince] = useState('');
-  const [locationCity, setLocationCity] = useState('');
-  const [businessContext, setBusinessContext] = useState<string[]>([]);
-
-  const [suggestedTopics, setSuggestedTopics] = useState<TopicSuggestion[]>([]);
+  
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [customTopic, setCustomTopic] = useState('');
-  // activeInfoTopic removed here as it was moved up
-
+  const [suggestedTopics, setSuggestedTopics] = useState<{topic: string, why: string}[]>([]);
+  
+  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(['news', 'press']);
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('professional');
+  const [frequency, setFrequency] = useState('daily');
   const [resultsPerScan, setResultsPerScan] = useState(5);
-  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(['news', 'legislation', 'government']);
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('premium');
-  const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly' | 'daily'>('biweekly');
-  const [analysisDepth, setAnalysisDepth] = useState<'standard' | 'deep'>('standard');
-  const [competitors, setCompetitors] = useState<string[]>([]);
-  const [competitorInput, setCompetitorInput] = useState('');
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [keywordInput, setKeywordInput] = useState('');
-  const [selectedSources, setSelectedSources] = useState<any[]>([]);
-  const [suggestedSources, setSuggestedSources] = useState<any[]>([]);
-  const [customSource, setCustomSource] = useState({ name: '', url: '', description: '', category: '', rssFeedUrl: '' });
-  const [requestingMoreSources, setRequestingMoreSources] = useState(false);
+
+  const locationCountry = '';
+  const locationProvince = '';
+  const locationCity = '';
+  const businessContext: string[] = [];
+  const selectedSources: any[] = [];
 
   // Sync resultsPerScan with selected tier
   useEffect(() => {
@@ -471,6 +463,12 @@ export default function Onboarding() {
     );
   };
 
+  const toggleContentType = (typeId: string) => {
+    setSelectedContentTypes((prev) =>
+      prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId]
+    );
+  };
+
   const addCustomTopic = () => {
     if (customTopic.trim()) {
       setSelectedTopics((prev) => [...prev, customTopic.trim()]);
@@ -480,34 +478,6 @@ export default function Onboarding() {
 
 
 
-
-  const toggleContentType = (typeId: string) => {
-    setSelectedContentTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
-    );
-  };
-
-  const addCompetitor = () => {
-    if (competitorInput.trim()) {
-      setCompetitors((prev) => [...prev, competitorInput.trim()]);
-      setCompetitorInput('');
-    }
-  };
-
-  const removeCompetitor = (index: number) => {
-    setCompetitors((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const addKeyword = () => {
-    if (keywordInput.trim()) {
-      setKeywords((prev) => [...prev, keywordInput.trim()]);
-      setKeywordInput('');
-    }
-  };
-
-  const removeKeyword = (index: number) => {
-    setKeywords((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const canProceed = () => {
     switch (currentStep) {
@@ -527,6 +497,15 @@ export default function Onboarding() {
         return false;
     }
   };
+
+  useEffect(() => {
+    if (currentStep === 7) {
+      const timer = setTimeout(() => {
+        handlePaymentRedirect();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep]);
 
   const handlePaymentRedirect = async () => {
     if (!profile || !user?.email) return;
@@ -561,75 +540,83 @@ export default function Onboarding() {
     setPaymentError(error);
   };
 
-  if ((authLoading && !profile) || (!authLoading && (!profile || !user))) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-sm text-gray-600">Loading your profile...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-12">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center shadow-2xl shadow-indigo-500/20">
-                <Activity className="w-6 h-6 text-indigo-400" />
-              </div>
-              <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">WatchDog<span className="text-indigo-600">AI</span></h1>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enterprise Intelligence Setup</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-indigo-600 shadow-lg shadow-indigo-500/50 animate-pulse" />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Intelligence Online</span>
-            </div>
-          </div>
+    <div className="flex h-screen bg-[#020617] text-slate-200 overflow-hidden font-sans selection:bg-blue-500/30">
+      <Sidebar />
+      
+      <div className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar relative">
+        {/* Background glow effects */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-          <div className="relative">
-            <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 -translate-y-1/2" />
-            <div 
-              className="absolute top-1/2 left-0 h-0.5 bg-indigo-600 -translate-y-1/2 transition-all duration-500 ease-out" 
-              style={{ width: `${((currentStep > 4 ? currentStep - 1 : currentStep) - 1) / 5 * 100}%` }}
-            />
-            <div className="relative flex justify-between">
+        <div className="max-w-5xl mx-auto w-full px-12 py-16 flex flex-col min-h-full relative z-10">
+          {/* Header & Steps */}
+          <div className="mb-16">
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20">
+                  <Activity className="w-6 h-6 text-white" strokeWidth={3} />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black text-white tracking-tight uppercase">Platform <span className="text-blue-500">Deployment</span></h1>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Configuring your intelligence node</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse" />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Status: Ready</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-6 px-2">
               {[1, 2, 3, 5, 6, 8].map((step, idx) => {
-                const label = ['Company', 'Topics', 'Plan', 'Summary', 'Review', 'Finish'][idx];
+                const label = ['Company', 'Topics', 'Plan', 'Content', 'Review', 'Finish'][idx];
                 const isActive = step === currentStep || (currentStep === 7 && step === 6);
                 const isCompleted = step < currentStep || (currentStep > 4 && step === 3);
 
                 return (
-                  <div key={step} className="flex flex-col items-center group">
+                  <div key={step} className="flex-1 flex items-center group">
                     <div
-                      className={`relative z-10 flex items-center justify-center w-10 h-10 rounded-2xl font-black text-xs transition-all duration-300 border-4 ${
+                      className={`flex items-center justify-center w-10 h-10 rounded-2xl font-black text-xs transition-all duration-500 relative ${
                         isActive
-                          ? 'bg-slate-900 text-white border-white shadow-xl shadow-slate-200 scale-110'
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 ring-4 ring-blue-600/20'
                           : isCompleted
-                          ? 'bg-indigo-600 text-white border-white shadow-lg shadow-indigo-100'
-                          : 'bg-white text-slate-300 border-slate-50'
+                          ? 'bg-blue-600/40 text-blue-200'
+                          : 'bg-slate-900 border border-slate-800 text-slate-600'
                       }`}
                     >
-                      {isCompleted ? <Check className="w-4 h-4" strokeWidth={3} /> : idx + 1}
+                      {isCompleted ? <Check className="w-5 h-5" strokeWidth={4} /> : idx + 1}
+                      {isActive && (
+                        <div className="absolute -bottom-1.5 w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+                      )}
                     </div>
-                    <span className={`absolute -bottom-7 text-[9px] font-black uppercase tracking-tighter whitespace-nowrap transition-colors ${
-                      isActive ? 'text-slate-900' : 'text-slate-400'
-                    }`}>
-                      {label}
-                    </span>
+                    {idx < 5 && (
+                      <div
+                        className={`flex-1 h-0.5 mx-3 transition-all duration-700 rounded-full ${
+                          isCompleted ? 'bg-blue-600' : 'bg-slate-800'
+                        }`}
+                      />
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-[32px] shadow-2xl shadow-slate-200/50 p-10 min-h-[500px] border border-slate-100 flex flex-col">
+            <div className="grid grid-cols-6 text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">
+              {['Identity', 'Taxonomy', 'Pricing', 'Sources', 'Review', 'Active'].map((label, idx) => {
+                const steps = [1, 2, 3, 5, 6, 8];
+                const isActive = steps[idx] === currentStep || (currentStep === 7 && steps[idx] === 6);
+                return (
+                  <span key={label} className={isActive ? 'text-blue-400' : ''}>{label}</span>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col bg-slate-900/40 backdrop-blur-xl rounded-[40px] border border-slate-800/50 p-12 shadow-2xl relative overflow-hidden">
+            {/* Inner background glow */}
+            <div className="absolute top-0 right-0 w-[30%] h-[30%] bg-blue-600/5 blur-[80px] rounded-full pointer-events-none" />
           {aiError && (
             <div className="mb-8 p-5 bg-rose-50 border-2 border-rose-100 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
               <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
@@ -644,205 +631,99 @@ export default function Onboarding() {
 
           {currentStep === 1 && (
             <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Company <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Details</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Tell us about your company so we can find the most relevant updates for you.
+              <div className="max-w-xl text-left">
+                <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-4 uppercase italic underline decoration-blue-500/20 underline-offset-8">Business <span className="text-blue-500">Identity</span></h2>
+                <p className="text-slate-400 font-bold leading-relaxed pr-8">
+                  Let's start by establishing your monitoring baseline. Tell us about your company so our AI can tailor your intelligence feed.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Company Name</label>
+              <div className="space-y-8 max-w-2xl text-left">
+                <div className="group transition-all">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Registered Company Name</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                      <Building2 className="h-5 w-5 text-slate-600 group-focus-within:text-blue-500 transition-colors" strokeWidth={3} />
+                    </div>
                     <input
                       type="text"
                       value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-slate-900 focus:border-indigo-500 transition-all outline-none placeholder:text-slate-300"
-                      placeholder="e.g. Acme Corp"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setCompanyName(e.target.value)}
+                      className="w-full bg-slate-950 border-2 border-slate-800/50 rounded-2xl pl-16 pr-6 py-5 font-black text-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all outline-none placeholder:text-slate-700"
+                      placeholder="e.g. Acme Corp..."
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Industry</label>
-                    <select
+                <div className="group transition-all">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Primary Industry Segment</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                      <Briefcase className="h-5 w-5 text-slate-600 group-focus-within:text-blue-500 transition-colors" strokeWidth={3} />
+                    </div>
+                    <input
+                      type="text"
                       value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-slate-900 focus:border-indigo-500 transition-all outline-none"
-                    >
-                      <option value="">Select Industry</option>
-                      {INDUSTRY_OPTIONS.map((ind) => (
-                        <option key={ind} value={ind}>
-                          {ind}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">Company Description</label>
-                    <textarea
-                      value={businessDescription}
-                      onChange={(e) => setBusinessDescription(e.target.value)}
-                      rows={5}
-                      className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-600 focus:border-indigo-500 transition-all outline-none resize-none leading-relaxed text-sm placeholder:text-slate-300"
-                      placeholder="What does your company do?"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setIndustry(e.target.value)}
+                      className="w-full bg-slate-950 border-2 border-slate-800/50 rounded-2xl pl-16 pr-6 py-5 font-black text-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all outline-none placeholder:text-slate-700"
+                      placeholder="e.g. Enterprise Software, Legal, Crypto..."
                     />
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5 block">What are you looking for?</label>
-                  <div className="grid grid-cols-1 gap-3">
-                    {MONITORING_GOALS.slice(0, 6).map((goal) => (
-                      <button
-                        key={goal}
-                        onClick={() => {
-                          if (monitoringGoals.includes(goal)) {
-                            setMonitoringGoals(monitoringGoals.filter(g => g !== goal));
-                          } else {
-                            setMonitoringGoals([...monitoringGoals, goal]);
-                          }
-                        }}
-                        className={`group flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
-                          monitoringGoals.includes(goal)
-                            ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100'
-                            : 'border-slate-50 bg-slate-50 hover:border-slate-100'
-                        }`}
-                      >
-                        <span className={`text-xs font-black uppercase tracking-wider transition-colors ${
-                          monitoringGoals.includes(goal) ? 'text-slate-900' : 'text-slate-500'
-                        }`}>{goal}</span>
-                        <div className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
-                          monitoringGoals.includes(goal) ? 'bg-indigo-600' : 'bg-slate-200 group-hover:bg-slate-300'
-                        }`}>
-                          {monitoringGoals.includes(goal) && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
-                        </div>
-                      </button>
-                    ))}
+                <div className="p-8 bg-blue-600/5 rounded-3xl border border-blue-600/20">
+                  <div className="flex gap-4 items-start">
+                    <div className="p-2 bg-blue-600/20 rounded-xl">
+                      <Info className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-500 leading-relaxed uppercase tracking-tight">
+                      <strong>AI Tip:</strong> These details help us distinguish your company from others and define the relevance of the articles we find.
+                    </p>
                   </div>
                 </div>
-              </div>
-
-              <div className="border-t pt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Geographic Focus (optional)</label>
-                <p className="text-xs text-gray-500 mb-3">Help AI find geographically relevant sources and filter updates by location</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Country/Region</label>
-                    <input
-                      type="text"
-                      value={locationCountry}
-                      onChange={(e) => setLocationCountry(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., Canada"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Province/State</label>
-                    <input
-                      type="text"
-                      value={locationProvince}
-                      onChange={(e) => setLocationProvince(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., British Columbia"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">City/Local</label>
-                    <input
-                      type="text"
-                      value={locationCity}
-                      onChange={(e) => setLocationCity(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., Vancouver"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Business Context (optional)</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { id: 'non-profit', label: 'Non-profit organization' },
-                    { id: 'government', label: 'Government/Public sector' },
-                    { id: 'b2b', label: 'B2B (business to business)' },
-                    { id: 'b2c', label: 'B2C (business to consumer)' },
-                    { id: 'startup', label: 'Startup/Early stage' },
-                    { id: 'enterprise', label: 'Enterprise/Large organization' },
-                    { id: 'regulated', label: 'Regulated industry' },
-                  ].map((context) => (
-                    <label
-                      key={context.id}
-                      className="flex items-start gap-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={businessContext.includes(context.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setBusinessContext([...businessContext, context.id]);
-                          } else {
-                            setBusinessContext(businessContext.filter(c => c !== context.id));
-                          }
-                        }}
-                        className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{context.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Tip:</strong> The more details you provide, the better our custom AI can recommend relevant topics and content for your needs.
-                </p>
               </div>
             </div>
           )}
 
           {currentStep === 2 && (
             <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Monitoring <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Topics</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  {aiLoading ? 'Our AI is finding the most relevant sources and topics for your business...' : 'Select the topics you want to monitor or add your own.'}
+              <div className="max-w-xl text-left">
+                <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-4 italic underline decoration-blue-500/20 underline-offset-8">Monitoring <span className="text-blue-500">Topics</span></h2>
+                <p className="text-slate-400 font-bold leading-relaxed pr-8">
+                  {aiLoading ? 'Our AI is scanning global signals to define your intelligence vectors...' : 'Select the topics you want to monitor or define your own custom vectors.'}
                 </p>
               </div>
 
               {aiLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
+                <div className="flex flex-col items-center justify-center py-20 bg-slate-900/40 rounded-[32px] border-2 border-dashed border-slate-800/50">
                   <div className="relative">
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-600 animate-bounce shadow-2xl shadow-indigo-200 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-600 animate-bounce shadow-2xl shadow-blue-500/20 flex items-center justify-center">
                       <Zap className="w-8 h-8 text-white animate-pulse" />
                     </div>
                   </div>
-                  <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">Finding Relevant Topics</p>
+                  <p className="mt-6 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] animate-pulse">Scanning Global Signals</p>
                 </div>
               ) : (
-                <div className="space-y-8">
+                <div className="space-y-8 text-left">
                   {suggestedTopics && suggestedTopics.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      {suggestedTopics.map((item) => (
+                      {suggestedTopics.map((item: any) => (
                         <div key={item.topic} className="relative group">
                           <button
                             onClick={() => toggleTopic(item.topic)}
                             className={`w-full p-6 rounded-3xl border-2 text-left transition-all duration-300 ${
                               selectedTopics.includes(item.topic)
-                                ? 'border-indigo-600 bg-white shadow-2xl shadow-indigo-100 scale-[1.02]'
-                                : 'border-slate-50 bg-slate-50 hover:border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100'
+                                ? 'border-blue-600 bg-blue-600/5 shadow-2xl shadow-blue-500/10 scale-[1.02]'
+                                : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60'
                             }`}
                           >
                             <div className="flex items-center justify-between pr-10">
                                <div>
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Suggested Vector</span>
-                                  <span className="font-black text-slate-900 text-lg leading-tight block pr-4">{item.topic}</span>
+                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">AI Suggested Vector</span>
+                                  <span className="font-black text-white text-lg leading-tight block pr-4">{item.topic}</span>
                                </div>
                                {selectedTopics.includes(item.topic) && (
-                                 <div className="w-7 h-7 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                                 <div className="w-7 h-7 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
                                     <Check className="w-4 h-4 text-white" strokeWidth={4} />
                                  </div>
                                )}
@@ -850,24 +731,24 @@ export default function Onboarding() {
                           </button>
                           
                           <button
-                            onClick={(e) => {
+                            onClick={(e: any) => {
                               e.stopPropagation();
                               setActiveInfoTopic(activeInfoTopic === item.topic ? null : item.topic);
                             }}
-                            className="absolute top-6 right-6 p-2.5 bg-white rounded-xl text-slate-400 hover:text-indigo-600 transition-all shadow-sm border border-slate-100 hover:border-indigo-100"
+                            className="absolute top-6 right-6 p-2.5 bg-slate-950 rounded-xl text-slate-600 hover:text-blue-500 transition-all shadow-sm border border-slate-800 hover:border-blue-500/50"
                             title="Why this topic?"
                           >
                             <Info className="w-4 h-4" />
                           </button>
 
                           {activeInfoTopic === item.topic && (
-                            <div className="absolute z-50 top-full left-0 right-0 mt-4 p-6 bg-slate-900 text-white rounded-[24px] shadow-2xl animate-in fade-in zoom-in-95 border border-white/10 ring-8 ring-indigo-500/5">
+                            <div className="absolute z-50 top-full left-0 right-0 mt-4 p-6 bg-slate-900 text-white rounded-[24px] shadow-2xl animate-in fade-in zoom-in-95 border border-white/10 ring-8 ring-blue-500/5">
                               <div className="flex justify-between items-start mb-4">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Why we suggest this</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">Why we suggest this</span>
                                 {item.priority && (
-                                  <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/20 rounded-full border border-indigo-500/30">
-                                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                                    <span className="text-[10px] text-indigo-100 font-black uppercase tracking-wider">
+                                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full border border-blue-500/30">
+                                    <Activity className="w-3.5 h-3.5 text-blue-400" />
+                                    <span className="text-[10px] text-blue-100 font-black uppercase tracking-wider">
                                        Priority: {item.priority}
                                     </span>
                                   </div>
@@ -890,48 +771,48 @@ export default function Onboarding() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-20 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
-                      <p className="text-slate-400 font-black mb-6 uppercase tracking-[0.2em] text-[10px]">No topics Suggested yet</p>
+                    <div className="text-center py-20 bg-slate-950 rounded-[32px] border-2 border-dashed border-slate-800">
+                      <p className="text-slate-600 font-black mb-6 uppercase tracking-[0.2em] text-[10px]">No topics Suggested yet</p>
                       <button
                         onClick={loadTopicSuggestions}
-                        className="px-10 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl hover:border-indigo-500 transition-all font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200/50"
+                        className="px-10 py-4 bg-slate-900 border-2 border-slate-800 text-white rounded-2xl hover:border-blue-600 transition-all font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/5"
                       >
                         Refresh Topics
                       </button>
                     </div>
                   )}
 
-                  <div className="pt-6 border-t border-slate-100">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 block">Add your own topic</label>
+                  <div className="pt-6 border-t border-slate-800/50">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 block">Add custom intelligence vector</label>
                     <div className="flex gap-3">
                       <input
                         type="text"
                         value={customTopic}
-                        onChange={(e) => setCustomTopic(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addCustomTopic()}
-                        className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-900 focus:border-indigo-500 transition-all outline-none"
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomTopic(e.target.value)}
+                        onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && addCustomTopic()}
+                        className="flex-1 bg-slate-950 border-2 border-slate-800 rounded-2xl px-6 py-4 font-black text-white focus:border-blue-600 transition-all outline-none"
                         placeholder="e.g. Specific Regulatory Change..."
                       />
                       <button
                         onClick={addCustomTopic}
-                        className="p-4 bg-slate-900 text-white rounded-2xl hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200"
+                        className="p-4 bg-white text-slate-900 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-white/5"
                       >
                         <Plus className="w-6 h-6" strokeWidth={3} />
                       </button>
                     </div>
                   </div>
 
-                  {selectedTopics.filter((t) => !suggestedTopics.some(s => s.topic === t)).length > 0 && (
+                  {selectedTopics.filter((t: string) => !suggestedTopics.some((s: any) => s.topic === t)).length > 0 && (
                     <div className="flex flex-wrap gap-2 pt-2">
                       {selectedTopics
-                        .filter((t) => !suggestedTopics.some(s => s.topic === t))
-                        .map((topic) => (
+                        .filter((t: string) => !suggestedTopics.some((s: any) => s.topic === t))
+                        .map((topic: string) => (
                           <span
                             key={topic}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
                           >
                             {topic}
-                            <button onClick={() => toggleTopic(topic)} className="hover:text-indigo-400">
+                            <button onClick={() => toggleTopic(topic)} className="hover:text-blue-400">
                               <X className="w-4 h-4" strokeWidth={3} />
                             </button>
                           </span>
@@ -945,73 +826,59 @@ export default function Onboarding() {
 
           {currentStep === 3 && (
             <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Choose <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Your Plan</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Choose a plan to start monitoring your industry and receive deep AI analysis.
+              <div className="max-w-xl text-left">
+                <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-4 italic underline decoration-blue-500/20 underline-offset-8">Choose <span className="text-blue-500">Your Plan</span></h2>
+                <p className="text-slate-400 font-bold leading-relaxed pr-8">
+                  Select an intelligence tier to start monitoring your industry vectors with deep AI analysis.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {Object.values(TIER_CONFIGS).map((tier) => (
+                {Object.values(TIER_CONFIGS).map((tier: any) => (
                   <button
                     key={tier.tier}
                     onClick={() => setSelectedTier(tier.tier)}
                     className={`relative flex flex-col p-8 rounded-[32px] border-2 text-left transition-all duration-300 ${
                       selectedTier === tier.tier
-                        ? 'border-indigo-600 bg-white shadow-2xl shadow-indigo-100 scale-[1.05] z-10'
-                        : 'border-slate-50 bg-slate-50 hover:border-slate-100 opacity-80 hover:opacity-100'
+                        ? 'border-blue-600 bg-blue-600/5 shadow-2xl shadow-blue-500/10 scale-[1.05] z-10'
+                        : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 opacity-80 hover:opacity-100'
                     }`}
                   >
                     {tier.tier === 'premium' && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-200">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-blue-500/50">
                         Most Popular
                       </div>
                     )}
                     <div className="mb-8">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{tier.name} Tier</h3>
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">{tier.name} Tier</h3>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-black text-slate-900">
+                        <span className="text-4xl font-black text-white">
                           {formatCurrency(tier.monthlyPrice)}
                         </span>
-                        <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">/mo</span>
+                        <span className="text-slate-500 font-bold text-xs uppercase tracking-widest">/mo</span>
                       </div>
                     </div>
 
                     <ul className="space-y-4 mb-8 flex-1">
-                      {tier.features.slice(0, 5).map((feature, idx) => (
+                      {tier.features.slice(0, 5).map((feature: string, idx: number) => (
                         <li key={idx} className="flex items-start gap-3">
                           <div className={`mt-0.5 p-1 rounded-md ${
-                            selectedTier === tier.tier ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'
+                            selectedTier === tier.tier ? 'bg-blue-600/20 text-blue-400' : 'bg-slate-800 text-slate-600'
                           }`}>
                             <Check className="w-3 h-3" strokeWidth={4} />
                           </div>
-                          <span className="text-[11px] font-bold text-slate-600 leading-tight uppercase tracking-tight">{feature}</span>
+                          <span className="text-[11px] font-bold text-slate-400 leading-tight uppercase tracking-tight">{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     <div className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] text-center transition-all ${
-                      selectedTier === tier.tier ? 'bg-slate-900 text-white' : 'bg-white border-2 border-slate-100 text-slate-400'
+                      selectedTier === tier.tier ? 'bg-white text-slate-900 shadow-xl shadow-white/10' : 'bg-slate-800/50 text-slate-500 border border-slate-700/30'
                     }`}>
                       {selectedTier === tier.tier ? 'Activated' : 'Select Plan'}
                     </div>
                   </button>
                 ))}
-              </div>
-
-              <div className="bg-slate-900 rounded-3xl p-8 flex items-center justify-between border border-white/10 shadow-2xl invisible opacity-0 h-0 w-0 overflow-hidden">
-                <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                    <Info className="w-6 h-6 text-indigo-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-black text-sm uppercase tracking-widest mb-1">Monitoring System</h4>
-                    <p className="text-slate-400 text-xs font-bold leading-relaxed">
-                      All plans include automated web monitoring. You can adjust your settings anytime after setup.
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1019,14 +886,14 @@ export default function Onboarding() {
 
           {currentStep === 5 && (
             <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Source <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Types</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
+              <div className="max-w-xl text-left">
+                <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-4">Source <span className="text-blue-500 underline decoration-blue-500/20 underline-offset-8">Types</span></h2>
+                <p className="text-slate-400 font-bold leading-relaxed pr-8">
                   Select the types of content you want us to monitor across the web for the most relevant updates.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-2 gap-5 text-left">
                 {CONTENT_TYPES.map((type) => {
                   const Icon = type.icon;
                   const isSelected = selectedContentTypes.includes(type.id);
@@ -1036,30 +903,30 @@ export default function Onboarding() {
                       onClick={() => toggleContentType(type.id)}
                       className={`group p-6 rounded-[24px] border-2 text-left transition-all duration-300 ${
                         isSelected
-                          ? 'border-indigo-600 bg-white shadow-2xl shadow-indigo-100'
-                          : 'border-slate-50 bg-slate-50 hover:border-slate-100 hover:bg-white'
+                          ? 'border-blue-600 bg-blue-600/5 shadow-2xl shadow-blue-500/10'
+                          : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60'
                       }`}
                     >
                       <div className="flex items-start gap-4">
                         <div className={`p-3 rounded-2xl transition-all duration-300 ${
                           isSelected
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                            : 'bg-white text-slate-400 group-hover:text-slate-600'
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                            : 'bg-slate-800 text-slate-500 group-hover:text-slate-400'
                         }`}>
                           <Icon className="w-6 h-6" strokeWidth={2.5} />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <span className={`text-[11px] font-black uppercase tracking-widest ${
-                              isSelected ? 'text-slate-900' : 'text-slate-500'
+                              isSelected ? 'text-white' : 'text-slate-500'
                             }`}>{type.label}</span>
                             {isSelected && (
-                              <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                              <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
                                  <Check className="w-3 h-3 text-white" strokeWidth={4} />
                               </div>
                             )}
                           </div>
-                          <p className="text-[10px] font-bold text-slate-400 leading-tight">Custom monitoring</p>
+                          <p className="text-[10px] font-bold text-slate-500 leading-tight">Custom monitoring</p>
                         </div>
                       </div>
                     </button>
@@ -1071,136 +938,106 @@ export default function Onboarding() {
 
           {currentStep === 6 && (
             <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Review <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Your Setup</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Review your business profile and monitoring settings before we start your daily scans.
+              <div className="max-w-xl text-left">
+                <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-4 uppercase italic underline decoration-blue-500/20 underline-offset-8">Review <span className="text-blue-500">Your Setup</span></h2>
+                <p className="text-slate-400 font-bold leading-relaxed pr-8">
+                  Review your business profile and monitoring settings before we start your baseline intelligence sweep.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-8">
-                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Business Profile</h3>
-                    <div className="space-y-3">
-                       <div className="flex justify-between items-center">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase">Company</span>
-                          <span className="text-sm font-black text-slate-900">{companyName}</span>
-                       </div>
-                       <div className="flex justify-between items-center">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase">Industry</span>
-                          <span className="text-sm font-black text-slate-900">{industry}</span>
-                       </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Monitored Topics ({selectedTopics.length})</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTopics.slice(0, 8).map((topic) => (
-                        <span key={topic} className="px-3 py-1.5 bg-slate-100 text-slate-900 rounded-lg text-[10px] font-black uppercase tracking-tight">
-                          {topic}
-                        </span>
-                      ))}
-                      {selectedTopics.length > 8 && (
-                        <span className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase">
-                          +{selectedTopics.length - 8} More
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Content Types</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedContentTypes.map((typeId) => {
-                        const type = CONTENT_TYPES.find((t) => t.id === typeId);
-                        return (
-                          <span key={typeId} className="px-3 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            {type?.label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mt-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scan Sensitivity</h3>
-                      <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
-                        getTierConfig(selectedTier).resultsChangeable ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
-                      }`}>
-                        {getTierConfig(selectedTier).resultsChangeable ? 'Customizable' : 'Fixed'}
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left w-full h-[500px]">
+                {/* Scrollable Configuration Column */}
+                <div className="bg-slate-900/40 rounded-[32px] border border-slate-800/50 p-6 flex flex-col shadow-inner h-full">
+                  <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 flex-shrink-0">Configuration Values</h3>
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-8 custom-scrollbar">
                     
+                    {/* Business Profile */}
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100">
-                        <div>
-                          <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">Results Per Scan</span>
-                          <span className="text-xl font-black text-slate-900">{resultsPerScan} Sources</span>
-                        </div>
-                        
-                        {getTierConfig(selectedTier).resultsChangeable && (
-                          <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                            <button 
-                              onClick={() => setResultsPerScan(Math.max(1, resultsPerScan - 1))}
-                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </button>
-                            <span className="text-sm font-black text-slate-900 w-4 text-center">{resultsPerScan}</span>
-                            <button 
-                              onClick={() => setResultsPerScan(Math.min(getTierConfig(selectedTier).maxResults, resultsPerScan + 1))}
-                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
+                       <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em] block mb-2">Target Profile</span>
+                       <div className="flex justify-between items-center p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">Entity</span>
+                          <span className="text-xs font-black text-white">{companyName || 'Not Set'}</span>
+                       </div>
+                       <div className="flex justify-between items-center p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">Vector</span>
+                          <span className="text-xs font-black text-white">{industry || 'Not Set'}</span>
+                       </div>
+                    </div>
+
+                    {/* Monitored Topics */}
+                    <div>
+                      <div className="flex justify-between flex-end mb-2">
+                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Signal Filters</span>
+                        <span className="text-[9px] font-black text-slate-600 bg-slate-950 px-2 py-0.5 rounded tracking-widest">{selectedTopics.length} Active</span>
                       </div>
-                      
-                      <p className="text-[10px] font-bold text-slate-400 leading-tight px-2 italic">
-                        {getTierConfig(selectedTier).resultsChangeable 
-                          ? "Enterprise users can adjust scan depth between 1-10 sources." 
-                          : "Standard tiers are optimized for the top 5 most relevant results."}
-                      </p>
+                      <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                        {selectedTopics.length > 0 ? selectedTopics.map((topic) => (
+                          <span key={topic} className="px-2 py-1 bg-slate-800/50 text-white border border-slate-700 rounded text-[9px] font-bold uppercase tracking-tight">
+                            {topic}
+                          </span>
+                        )) : <span className="text-xs text-slate-600 italic">No topics selected</span>}
+                      </div>
+                    </div>
+
+                    {/* Content Types */}
+                    <div>
+                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em] block mb-2">Source Integrity</span>
+                      <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                        {selectedContentTypes.length > 0 ? selectedContentTypes.map((typeId) => {
+                          const type = CONTENT_TYPES.find((t) => t.id === typeId);
+                          return (
+                            <span key={typeId} className="px-2 py-1 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest">
+                              {type && <type.icon className="w-3 h-3" />}
+                              {type?.label}
+                            </span>
+                          );
+                        }) : <span className="text-xs text-slate-600 italic">No sources selected</span>}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-900 rounded-[40px] p-10 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-10">
-                     <Activity className="w-32 h-32 text-indigo-400" strokeWidth={1} />
-                  </div>
+                {/* Fixed Plan Overview Column */}
+                <div className="bg-slate-950 rounded-[40px] p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group border border-slate-800 h-full">
+                  <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-blue-500/5 blur-[80px] rounded-full pointer-events-none transition-transform duration-1000 group-hover:scale-110" />
                   
-                  <div className="relative z-10">
-                    <div className="inline-block px-3 py-1 bg-indigo-500/20 rounded-lg border border-indigo-500/30 text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-6">
-                      Selected Plan
+                  <div className="relative z-10 flex-shrink-0">
+                    <div className="inline-flex items-center gap-2 mb-8">
+                       <div className="w-2 h-2 rounded bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse" />
+                       <span className="text-[9px] font-black text-blue-400 uppercase tracking-[0.3em]">Network Node Status</span>
                     </div>
-                    <h3 className="text-3xl font-black text-white tracking-tight mb-4 uppercase">{getTierConfig(selectedTier).name} Plan</h3>
-                    <ul className="space-y-3 mb-8">
-                      {getTierConfig(selectedTier).features.map((feature, idx) => (
-                        <li key={idx} className="flex items-center gap-2 group/feat">
-                          <div className="w-5 h-5 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover/feat:bg-indigo-500/30 transition-colors">
-                            <Check className="w-3 h-3 text-indigo-400" strokeWidth={4} />
+                    
+                    <h3 className="text-4xl font-black text-white tracking-tight mb-2 uppercase italic">{getTierConfig(selectedTier).name} <span className="text-blue-500">Tier</span></h3>
+                    <p className="text-sm font-bold text-slate-400 tracking-tight leading-relaxed mb-6">Fully operational {getTierConfig(selectedTier).features[0].toLowerCase()} optimized for advanced analytics.</p>
+                    
+                    <div className="space-y-4">
+                      {getTierConfig(selectedTier).features.slice(1, 4).map((feature, idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <div className="w-5 h-5 rounded border border-slate-800 bg-slate-900 flex items-center justify-center flex-shrink-0">
+                            <Check className="w-3 h-3 text-blue-500" strokeWidth={4} />
                           </div>
-                          <span className="text-[11px] font-bold text-slate-300 uppercase tracking-tight group-hover/feat:text-white transition-colors">{feature}</span>
-                        </li>
+                          <span className="text-xs font-bold text-slate-300 tracking-tight leading-tight">{feature}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
 
-                  <div className="relative z-10 space-y-4 border-t border-white/5 pt-8 mt-12">
-                     <div className="flex justify-between items-center text-slate-400 font-bold text-xs uppercase tracking-widest">
-                        <span>Credits / Mo</span>
-                        <span className="text-white">{getTierConfig(selectedTier).monthlyCredits}</span>
-                     </div>
-                     <div className="flex justify-between items-baseline">
-                        <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Monthly</span>
+                  {/* Summary Bar */}
+                  <div className="relative z-10 mt-auto pt-6 border-t border-slate-800/50 flex-shrink-0">
+                     <div className="flex justify-between items-end">
+                        <div>
+                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Power Allocation</span>
+                           <div className="text-sm font-black text-blue-400 flex items-center gap-2">
+                             <Zap className="w-4 h-4" />
+                             {getTierConfig(selectedTier).monthlyCredits} CPU / MO
+                           </div>
+                        </div>
                         <div className="text-right">
-                           <span className="text-4xl font-black text-white">${pricing.monthly.toFixed(0)}</span>
-                           <span className="text-indigo-400 text-xs font-black ml-1 uppercase">CAD</span>
+                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Network Access</span>
+                           <div className="flex items-baseline gap-1">
+                             <span className="text-4xl font-black text-white tracking-tighter leading-none">${pricing.monthly.toFixed(0)}</span>
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">/ Mo</span>
+                           </div>
                         </div>
                      </div>
                   </div>
@@ -1209,148 +1046,74 @@ export default function Onboarding() {
             </div>
           )}
 
+
           {currentStep === 7 && (
-            <div className="space-y-10 flex-1">
-              <div className="max-w-xl">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Secure <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">Payment</span></h2>
-                <p className="text-slate-500 font-bold leading-relaxed pr-8">
-                  Securely add your payment method to activate your account and start your monitoring pipelines.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                <div className="bg-slate-50 rounded-[32px] p-8 border-2 border-slate-100">
-                  <div className="mb-8 flex items-center gap-3 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                     <Zap className="w-4 h-4 text-indigo-600" strokeWidth={3} />
-                     <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">7-Day Free Trial Active</span>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <p className="text-sm text-slate-600 font-bold leading-relaxed">
-                      You will be redirected to Stripe to securely complete your setup. Your 7-day free trial starts today, and you won't be charged until it ends.
-                    </p>
-                    
-                    <button
-                      onClick={handlePaymentRedirect}
-                      disabled={loading}
-                      className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all flex items-center justify-center gap-3 group"
-                    >
-                      {loading ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          Confirm & Continue to Stripe
-                          <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </>
-                      )}
-                    </button>
-                    
-                    <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">
-                      Cancel anytime in your billing dashboard
-                    </p>
-                  </div>
-
-                  {paymentError && (
-                    <div className="mt-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                      <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-black text-rose-900 uppercase tracking-widest mb-1">Payment Failure</p>
-                        <p className="text-xs text-rose-700 font-bold leading-relaxed">{paymentError}</p>
-                      </div>
-                    </div>
-                  )}
+            <div className="flex flex-col items-center justify-center py-24 flex-1">
+              <div className="relative mb-12">
+                <div className="w-32 h-32 rounded-[40px] bg-blue-600/10 border-2 border-dashed border-blue-600/30 flex items-center justify-center animate-[spin_10s_linear_infinite]">
+                  <CreditCard className="w-12 h-12 text-blue-500 -rotate-45" />
                 </div>
-
-                <div className="space-y-6">
-                  <div className="p-8 bg-slate-900 rounded-[32px] text-white shadow-2xl relative overflow-hidden">
-                    <div className="inline-flex items-center justify-center w-12 h-12 bg-white/5 rounded-2xl mb-6 border border-white/10">
-                      <DollarSign className="w-6 h-6 text-indigo-400" />
-                    </div>
-                    <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">{getTierConfig(selectedTier).name} Subscription</h3>
-                    
-                    <div className="space-y-3 mt-6 border-t border-white/5 pt-6">
-                      <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-tight">
-                        <span>Daily Scan Depth</span>
-                        <span className="text-white">{getTierConfig(selectedTier).maxResults} Results / Scan</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-tight">
-                        <span>Manual Scan Credits</span>
-                        <span className="text-white">{getTierConfig(selectedTier).monthlyCredits} / Month</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-10 pt-6 border-t border-indigo-500/20">
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-4xl font-black text-white">
-                          ${pricing.monthly.toFixed(0)}
-                        </span>
-                        <span className="text-indigo-400 font-black text-xs uppercase tracking-widest">
-                          / MONTH
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
-                        Securely processed via Stripe. Your data is encrypted using AES-256 standard. Charges appear as WATCHDOG_AI_LTD.
-                     </p>
-                  </div>
+                <div className="absolute inset-0 w-32 h-32 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full bg-blue-600 animate-ping" />
                 </div>
               </div>
+              <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-6 italic underline decoration-blue-500/20 underline-offset-8">Secure <span className="text-blue-500">Checkout</span></h2>
+              <p className="text-slate-400 font-bold leading-relaxed max-w-md text-center uppercase tracking-widest text-xs">
+                Establishing subscription tunnel. Redirecting to our secure payment gateway in <span className="text-blue-500">3 seconds...</span>
+              </p>
             </div>
           )}
 
           {currentStep === 8 && (
             <div className="space-y-12 flex-1 flex flex-col items-center justify-center text-center">
-              <div className="relative">
-                <div className="absolute inset-0 bg-indigo-500/20 blur-[100px] rounded-full animate-pulse" />
-                <div className="relative z-10 w-24 h-24 rounded-[32px] bg-slate-900 flex items-center justify-center shadow-2xl shadow-indigo-500/50">
-                   <Activity className="w-10 h-10 text-indigo-400" strokeWidth={3} />
+              <div className="relative mb-8">
+                <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full animate-pulse" />
+                <div className="relative z-10 w-24 h-24 rounded-[32px] bg-slate-900 border border-slate-800 flex items-center justify-center shadow-2xl shadow-blue-500/20">
+                   <Activity className="w-10 h-10 text-blue-400" strokeWidth={3} />
                 </div>
-                <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-indigo-600 border-4 border-white flex items-center justify-center shadow-lg">
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-blue-600 border-4 border-[#020617] flex items-center justify-center shadow-lg">
                    <Check className="w-5 h-5 text-white" strokeWidth={4} />
                 </div>
               </div>
 
-              <div className="max-w-md">
-                <h2 className="text-5xl font-black text-slate-900 tracking-tight leading-none mb-4 uppercase">Setup <span className="text-indigo-600">Complete</span></h2>
-                <p className="text-slate-500 font-bold text-lg leading-relaxed">
-                  You're all set! We're starting your first scan now and will notify you of any findings.
+              <div className="max-w-md space-y-4">
+                <h2 className="text-5xl font-black text-white tracking-tight leading-none uppercase italic">Setup <span className="text-blue-500">Complete</span></h2>
+                <p className="text-slate-400 font-bold text-lg leading-relaxed px-4">
+                  Intelligence node operational. We're starting your first scan now and will notify you of any findings.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                <div className="p-8 bg-slate-50 rounded-[32px] border-2 border-slate-100 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Topics</span>
-                  <span className="text-3xl font-black text-slate-900">{selectedTopics.length}</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl">
+                <div className="p-8 bg-slate-900/40 rounded-[32px] border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Vectors</span>
+                  <span className="text-3xl font-black text-white">{selectedTopics.length}</span>
                 </div>
 
-                <div className="p-8 bg-slate-50 rounded-[32px] border-2 border-slate-100 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Scan Credits</span>
-                  <span className="text-3xl font-black text-indigo-600">∞</span>
+                <div className="p-8 bg-slate-900/40 rounded-[32px] border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Credits</span>
+                  <span className="text-3xl font-black text-blue-500">{getTierConfig(selectedTier).monthlyCredits}</span>
                 </div>
 
-                <div className="p-8 bg-slate-50 rounded-[32px] border-2 border-slate-100 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tier Status</span>
-                  <span className="text-3xl font-black text-slate-900">{getTierConfig(selectedTier).name.charAt(0)}</span>
+                <div className="p-8 bg-slate-900/40 rounded-[32px] border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Status</span>
+                  <span className="text-3xl font-black text-white uppercase">{selectedTier.charAt(0)}</span>
                 </div>
               </div>
 
-              <div className="w-full max-w-lg p-8 bg-slate-900 rounded-[32px] text-left border border-white/10 shadow-2xl">
-                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">What happens next</h4>
+              <div className="w-full max-w-lg p-8 bg-blue-600/5 rounded-[32px] text-left border border-blue-500/20 shadow-2xl">
+                 <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-4">Post-Deployment Protocol</h4>
                  <div className="space-y-4">
                     <div className="flex gap-4 items-start">
-                       <div className="p-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                          <Zap className="w-3 h-3" />
+                       <div className="p-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          <Zap className="w-3 h-3" strokeWidth={3} />
                        </div>
-                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">System will start its initial scan immediately.</p>
+                       <p className="text-xs font-bold text-slate-400 leading-relaxed uppercase tracking-tight">System will initiate baseline intelligence sweep immediately.</p>
                     </div>
                     <div className="flex gap-4 items-start">
-                       <div className="p-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                          <Zap className="w-3 h-3" />
+                       <div className="p-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          <Zap className="w-3 h-3" strokeWidth={3} />
                        </div>
-                       <p className="text-xs font-bold text-slate-300 leading-relaxed uppercase tracking-tight">Results will appear in your dashboard within 60 seconds.</p>
+                       <p className="text-xs font-bold text-slate-400 leading-relaxed uppercase tracking-tight">Primary signals will propagate to your hub within 60 seconds.</p>
                     </div>
                  </div>
               </div>
@@ -1377,46 +1140,53 @@ export default function Onboarding() {
           </div>
         )}
 
-        <div className="flex justify-between mt-12 mb-20 px-4">
+        <div className="flex justify-between mt-12 mb-20 px-8 py-10 bg-slate-900/40 rounded-[32px] border border-slate-800/50 backdrop-blur-md">
           <button
             onClick={handleBack}
             disabled={currentStep === 1 || loading}
-            className="flex items-center gap-3 px-8 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-all disabled:opacity-30"
+            className="group flex items-center gap-3 px-8 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all disabled:opacity-0 disabled:pointer-events-none"
           >
-            <ChevronLeft className="w-5 h-5" strokeWidth={3} />
-            Previous Step
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" strokeWidth={4} />
+            BACKBOLT
           </button>
 
-          <div className="flex items-center gap-12">
-            <div className="hidden sm:flex flex-col items-end invisible opacity-0">
-               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Setup Progress</span>
-               <span className="text-xs font-black text-slate-900 tracking-tighter">
-                  {Math.round(((currentStep > 4 ? currentStep - 1 : currentStep) / 6) * 100)}% COMPLETE
-               </span>
+          <div className="flex items-center gap-10">
+            <div className="hidden sm:flex flex-col items-end">
+               <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-1">Status Report</span>
+               <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-xs font-black text-white tracking-[0.2em]">
+                    PHASE_{currentStep}_INITIATED
+                  </span>
+               </div>
             </div>
             
             {currentStep === 8 ? (
               <button
                 onClick={handleFinish}
                 disabled={loading}
-                className="group flex items-center gap-4 px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all duration-300 disabled:opacity-50"
+                className="group flex items-center gap-5 px-12 py-5 bg-white text-slate-900 rounded-[24px] font-black text-[13px] uppercase tracking-[0.2em] hover:bg-blue-600 hover:text-white hover:shadow-2xl hover:shadow-blue-500/40 transition-all duration-500 disabled:opacity-50 relative overflow-hidden"
               >
-                {loading ? 'Starting Platform...' : 'Start WatchDog'}
-                <Zap className="w-5 h-5 group-hover:scale-125 transition-transform" />
+                <div className="absolute inset-0 bg-blue-600 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+                <span className="relative z-10 flex items-center gap-3">
+                  {loading ? 'CALIBRATING...' : 'ESTABLISH WATCHDOG'}
+                  <Zap className="w-5 h-5 group-hover:animate-bounce" />
+                </span>
               </button>
             ) : currentStep < 7 ? (
               <button
                 onClick={handleNext}
                 disabled={!canProceed() || loading}
-                className="group flex items-center gap-4 px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 hover:shadow-2xl hover:shadow-indigo-200 transition-all duration-300 disabled:bg-slate-100 disabled:text-slate-300 disabled:shadow-none"
+                className="group flex items-center gap-5 px-12 py-5 bg-white text-slate-900 rounded-[24px] font-black text-[13px] uppercase tracking-[0.2em] hover:bg-blue-600 hover:text-white hover:shadow-[0_0_50px_rgba(59,130,246,0.2)] transition-all duration-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none"
               >
-                {loading ? 'Processing...' : currentStep === 6 ? 'Finish Review' : 'Continue'}
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={3} />
+                {loading ? 'PROCESSING...' : currentStep === 6 ? 'DEPLOY' : 'NEXT_LEVEL'}
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-2 transition-transform shadow-blue-500/20" strokeWidth={4} />
               </button>
             ) : null}
+          </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  ); 
 }

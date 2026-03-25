@@ -3,22 +3,19 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, Subscription, Source, PaymentHistory } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity, ArrowLeft, CreditCard, Download, Check, Zap, AlertCircle, X
+  Activity, CreditCard, Download, Check, Zap, AlertCircle, Loader2, ChevronRight
 } from 'lucide-react';
-import { calculatePricing, PricingConfig, formatCurrency, getFrequencyLabel, getDeliveryMethodLabel, CREDIT_PACKAGES, TIER_CONFIGS, SubscriptionTier, getTierConfig, calculateScansFromCredits } from '../utils/pricing';
-
-// Stripe Elements and Card Input removed in favor of direct Payment Links
+import { calculatePricing, PricingConfig, formatCurrency, getDeliveryMethodLabel, CREDIT_PACKAGES, TIER_CONFIGS, SubscriptionTier, getTierConfig } from '../utils/pricing';
+import Sidebar from '../components/Sidebar';
 
 export default function Billing() {
-  const { profile, user, signOut, loading: authLoading } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [processingCheckout, setProcessingCheckout] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
-  const [showCardForm, setShowCardForm] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
 
   useEffect(() => {
     if (profile?.id && !authLoading) {
@@ -26,25 +23,14 @@ export default function Billing() {
     }
   }, [profile?.id, authLoading]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success') === 'true') {
-      setTimeout(() => {
-        loadData();
-      }, 2000);
-    }
-  }, []);
-
   const loadData = async () => {
     if (!profile?.id) return;
-
     try {
       const [subscriptionRes, sourcesRes, paymentsRes] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('profile_id', profile.id).maybeSingle(),
         supabase.from('sources').select('*').eq('profile_id', profile.id),
         supabase.from('payment_history').select('*').eq('profile_id', profile.id).order('created_at', { ascending: false }).limit(10),
       ]);
-
       setSubscription(subscriptionRes.data);
       setSources(sourcesRes.data || []);
       setPaymentHistory(paymentsRes.data || []);
@@ -53,413 +39,175 @@ export default function Billing() {
     }
   };
 
-  // handleCardSuccess and legacy process-payment logic removed
+  const handleManageBilling = async () => {
+    if (!profile?.id) return;
+    setProcessingCheckout(true);
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('create-billing-portal', {
+        body: { profile_id: profile.id },
+      });
+      if (functionError) throw new Error(functionError.message);
+      if (data?.url) window.location.href = data.url;
+    } catch (error) {
+      alert('Failed to open billing portal.');
+    } finally {
+      setProcessingCheckout(false);
+    }
+  };
 
-  const handlePurchaseCredits = (pkg: typeof CREDIT_PACKAGES[0]) => {
-    const stripeLinks = {
+  const handlePurchaseCredits = (credits: number) => {
+    const links = {
       100: 'https://buy.stripe.com/7sY4gz9OA673d9xgztfMA00',
       300: 'https://buy.stripe.com/00w9AT5ykbrnc5tdnhfMA01',
       1000: 'https://buy.stripe.com/4gMfZh6Co52Z3yX1EzfMA02',
     };
-
-    const link = stripeLinks[pkg.credits as keyof typeof stripeLinks];
-    if (link && profile?.id) {
-      const stripeUrl = new URL(link);
+    const url = links[credits as keyof typeof links];
+    if (url && profile?.id) {
+      const stripeUrl = new URL(url);
       stripeUrl.searchParams.set('client_reference_id', profile.id);
       if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
       window.location.href = stripeUrl.toString();
     }
   };
 
-  const handleManageBilling = async () => {
-    if (!profile?.id) return;
-
-    setProcessingCheckout(true);
-    try {
-      const { data, error: functionError } = await supabase.functions.invoke('create-billing-portal', {
-        body: {
-          profile_id: profile.id,
-        },
-      });
-
-      if (functionError) {
-        throw new Error(functionError.message || 'Failed to create billing portal');
-      }
-      if (data && data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data?.error || 'No portal URL returned');
-      }
-    } catch (error) {
-      console.error('Error opening billing portal:', error);
-      alert('Failed to open billing portal. Please try again.');
-    } finally {
-      setProcessingCheckout(false);
-    }
-  };
-
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
       </div>
     );
   }
 
-  if (!profile) {
-    navigate('/login');
-    return null;
-  }
-
-  const config: PricingConfig = {
-    frequency: subscription?.frequency || 'weekly',
+  const pricing = calculatePricing({
+    tier: (subscription?.subscription_tier as SubscriptionTier) || 'basic',
     sourceCount: sources.length,
     contentTypeCount: profile?.content_types?.length || 0,
     deliveryMethod: subscription?.delivery_method || 'dashboard',
     deepAnalysis: false,
-  };
+  });
 
-  const pricing = calculatePricing(config);
   const nextBillingDate = subscription?.current_period_end
     ? new Date(subscription.current_period_end)
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  const getStatusBadge = () => {
-    const status = subscription?.subscription_status || 'active';
-    const configs = {
-      active: { bg: 'bg-green-100', text: 'text-green-800', label: 'Active' },
-      trialing: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Trial' },
-      past_due: { bg: 'bg-red-100', text: 'text-red-800', label: 'Past Due' },
-      canceled: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Canceled' },
-      unpaid: { bg: 'bg-red-100', text: 'text-red-800', label: 'Unpaid' },
-      incomplete: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Incomplete' },
-    };
-    const config = configs[status] || configs.active;
-    return (
-      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${config.bg} ${config.text}`}>
-        {config.label}
-      </span>
-    );
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      <div className="max-w-5xl mx-auto p-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Updates
-        </button>
+    <div className="flex h-screen bg-[#020617] text-slate-100 overflow-hidden">
+      <Sidebar />
 
-        <div className="flex items-center gap-3 mb-8">
-          <CreditCard className="w-8 h-8 text-blue-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Billing</h1>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Current Plan */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-8 border border-gray-200">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {getTierConfig(subscription?.subscription_tier || 'basic').name}
-                  </h2>
-
-                  {getStatusBadge()}
-                </div>
-                <p className="text-gray-600">
-                  {subscription?.cancel_at_period_end
-                    ? 'Cancels at period end'
-                    : subscription?.subscription_status === 'trialing'
-                    ? 'Trial period'
-                    : 'Active subscription'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-4xl font-bold text-blue-600">
-                  {formatCurrency(pricing.monthlyTotal)}
-                </p>
-                <p className="text-gray-600">/month</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-blue-900 mb-2">
-                  <Check className="w-5 h-5" />
-                  <span className="font-semibold">Next billing date</span>
-                </div>
-                <p className="text-blue-800 font-medium">
-                  {nextBillingDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </p>
-              </div>
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-green-900 mb-2">
-                  <Zap className="w-5 h-5" />
-                  <span className="font-semibold">Manual Scan Credits</span>
-                </div>
-                <p className="text-green-800 font-medium">
-                  {profile?.manual_scan_credits || 0} credits ({Math.floor((profile?.manual_scan_credits || 0) / 25)} scans)
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="font-bold text-gray-900 mb-4">Plan Breakdown</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">
-                    Base plan ({getTierConfig(subscription?.subscription_tier || 'basic').name.toLowerCase()})
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    {formatCurrency(getTierConfig(subscription?.subscription_tier || 'basic').monthlyPrice)}
-                  </span>
-                </div>
-
-
-                {pricing.deliveryPrice > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {getDeliveryMethodLabel(subscription?.delivery_method || 'dashboard')}
-                    </span>
-                    <span className="font-semibold text-gray-900">
-                      {formatCurrency(pricing.deliveryPrice)}
-                    </span>
-                  </div>
-                )}
-                {pricing.deepAnalysisPrice > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Deep Analysis</span>
-                    <span className="font-semibold text-gray-900">
-                      {formatCurrency(pricing.deepAnalysisPrice)}
-                    </span>
-                  </div>
-                )}
-                <div className="border-t border-gray-200 pt-3 flex justify-between">
-                  <span className="font-bold text-gray-900">Total</span>
-                  <span className="font-bold text-gray-900 text-lg">
-                    {formatCurrency(getTierConfig(subscription?.subscription_tier || 'basic').monthlyPrice)}/month
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mt-4">
-              <div className="flex items-center gap-2 text-green-900 mb-1">
-                <Zap className="w-4 h-4" />
-                <span className="font-semibold text-sm">Manual Scan Credits</span>
-              </div>
-              <p className="text-xs text-green-800">
-                {pricing.includedCredits} credits included per month ({pricing.includedScans} manual scans)
-              </p>
-              <p className="text-xs text-green-700 mt-1">
-                Credits reset monthly • Additional credits available below
-              </p>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleManageBilling}
-                disabled={processingCheckout || !subscription?.stripe_customer_id}
-                className="flex-1 px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processingCheckout ? 'Loading...' : 'Manage Subscription'}
-              </button>
-            </div>
-            {!subscription?.stripe_customer_id && (
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Visit Settings to set up your subscription
-              </p>
-            )}
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="px-8 py-6 bg-[#020617]/80 backdrop-blur-md border-b border-slate-800/50 flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+              <CreditCard className="w-6 h-6 text-blue-500" />
+              Billing
+            </h1>
+            <p className="text-sm text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage your subscription and credits</p>
           </div>
-        </div>
+        </header>
 
-        {/* Subscription Tiers */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Subscription Plans</h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Choose the plan that best fits your monitoring needs. All plans include customizable update frequency.
-          </p>
+        <div className="flex-1 overflow-y-auto px-10 py-8 scrollbar-hide">
+          <div className="max-w-5xl mx-auto space-y-10 pb-20 text-left">
+            
+            {/* Current Status */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-3xl p-8 backdrop-blur-sm">
+                <div className="flex items-start justify-between mb-8">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-3xl font-black">{getTierConfig(subscription?.subscription_tier || 'basic').name}</h2>
+                      <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase border border-emerald-500/20 rounded-full">Active</span>
+                    </div>
+                    <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Renewal Date: {nextBillingDate.toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-blue-500">{formatCurrency(getTierConfig(subscription?.subscription_tier || 'basic').monthlyPrice)}</p>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Per Month CAD</p>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Object.values(TIER_CONFIGS).map((tier) => {
-              const isCurrentTier = subscription?.subscription_tier === tier.tier;
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="bg-slate-800/40 border border-slate-700/30 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 text-slate-300 mb-2">
+                      <Zap className="w-4 h-4 text-blue-500 fill-blue-500" />
+                      <span className="font-bold text-xs uppercase tracking-widest">Scan Capacity</span>
+                    </div>
+                    <p className="text-lg font-black text-white">{profile?.manual_scan_credits || 0} Credits Remaining</p>
+                  </div>
+                  <div className="bg-slate-800/40 border border-slate-700/30 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 text-slate-300 mb-2">
+                      <Check className="w-4 h-4 text-emerald-500" />
+                      <span className="font-bold text-xs uppercase tracking-widest">Intelligence Pulse</span>
+                    </div>
+                    <p className="text-lg font-black text-white">{subscription?.frequency || 'Weekly'} Automated Updates</p>
+                  </div>
+                </div>
 
-              return (
-                <div
-                  key={tier.tier}
-                  className={`border-2 rounded-xl p-6 transition-all ${
-                    isCurrentTier
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
+                <button
+                  onClick={handleManageBilling}
+                  disabled={processingCheckout || !subscription?.stripe_customer_id}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50"
                 >
-                  {isCurrentTier && (
-                    <div className="inline-block px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full mb-3">
-                      CURRENT PLAN
-                    </div>
-                  )}
-                  {tier.tier === 'premium' && !isCurrentTier && (
-                    <div className="inline-block px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full mb-3">
-                      POPULAR
-                    </div>
-                  )}
-                  <div className="mb-4">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{tier.name}</h3>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-bold text-blue-600">
-                        {formatCurrency(tier.monthlyPrice)}
-                      </span>
-                      <span className="text-gray-600">/month</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-3 mb-6">
-                    {tier.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm">
-                        <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button
-                    onClick={() => {
-                      if (!isCurrentTier) {
-                        const tierConfig = TIER_CONFIGS[tier.tier];
-                        if (tierConfig.paymentLink && profile?.id) {
-                          setProcessingCheckout(true);
-                          const stripeUrl = new URL(tierConfig.paymentLink);
-                          stripeUrl.searchParams.set('client_reference_id', profile.id);
-                          if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
-                          window.location.href = stripeUrl.toString();
-                        } else {
-                          alert('Payment link not configured for this tier.');
-                        }
-                      }
-                    }}
-                    disabled={isCurrentTier || processingCheckout}
-                    className={`w-full py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isCurrentTier
-                        ? 'bg-gray-100 text-gray-600'
-                        : tier.tier === 'premium'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                    }`}
-                  >
-                    {isCurrentTier ? 'Current Plan' : processingCheckout ? 'Redirecting...' : 'Upgrade Now'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-blue-900 mb-1">
-                  Update frequency doesn't change price
-                </p>
-                <p className="text-xs text-blue-800">
-                  Choose between monthly, bi-weekly, or weekly automated updates at no extra cost. Manual scans cost 25 credits each.
-                </p>
+                  {processingCheckout ? 'Redirecting...' : 'Access Customer Portal'}
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-
-
-        {/* Billing History */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Billing History</h2>
-
-          {paymentHistory.length === 0 ? (
-            <div className="text-center py-12">
-              <CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600">No payment history yet</p>
-              <p className="text-sm text-gray-500 mt-1">Your invoices will appear here</p>
-
-              {!profile?.stripe_customer_id && (
-                <div className="mt-8 pt-8 border-t border-gray-200 max-w-md mx-auto">
-                  <p className="text-sm font-semibold text-gray-700 mb-4">Start your subscription</p>
-                  <button
-                    onClick={() => {
-                      const tierConfig = TIER_CONFIGS['basic'];
-                      if (tierConfig.paymentLink && profile?.id) {
-                        setProcessingCheckout(true);
-                        const stripeUrl = new URL(tierConfig.paymentLink);
-                        stripeUrl.searchParams.set('client_reference_id', profile.id);
-                        if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
-                        window.location.href = stripeUrl.toString();
-                      }
-                    }}
-                    className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                  >
-                    Choose Plan & Continue
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {paymentHistory.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      payment.status === 'paid' ? 'bg-green-100' : 'bg-gray-100'
-                    }`}>
-                      <Download className={`w-5 h-5 ${
-                        payment.status === 'paid' ? 'text-green-600' : 'text-gray-600'
-                      }`} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-900">
-                          {new Date(payment.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          payment.status === 'paid'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {payment.status}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        {formatCurrency(payment.amount_cents / 100)} • {payment.description || payment.transaction_type}
-                      </p>
-                    </div>
-                  </div>
-                  {payment.invoice_pdf_url && (
-                    <a
-                      href={payment.invoice_pdf_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-colors"
+              {/* Quick Top up */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 mb-6 tracking-widest">Quick Top-Up</h3>
+                <div className="space-y-4">
+                  {[
+                    { amt: 100, price: '$25' },
+                    { amt: 300, price: '$65' },
+                    { amt: 1000, price: '$195' },
+                  ].map(pkg => (
+                    <button
+                      key={pkg.amt}
+                      onClick={() => handlePurchaseCredits(pkg.amt)}
+                      className="w-full flex items-center justify-between p-4 bg-slate-800/40 border border-slate-700/50 rounded-xl hover:bg-slate-800 transition-all group"
                     >
-                      Download
-                    </a>
-                  )}
+                      <span className="font-black text-xs">{pkg.amt} Credits</span>
+                      <span className="font-black text-blue-500">{pkg.price}</span>
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+
+            {/* Invoices */}
+            <div className="space-y-6">
+              <h2 className="text-xl font-black">Billing History</h2>
+              <div className="bg-slate-900/20 border border-slate-800/50 rounded-3xl overflow-hidden">
+                {paymentHistory.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <Activity className="w-12 h-12 text-slate-800 mx-auto mb-4" />
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No transactions detected yet</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-800/50">
+                    {paymentHistory.map(payment => (
+                      <div key={payment.id} className="p-6 flex items-center justify-between hover:bg-slate-800/10 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center">
+                            <Download className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="font-black text-sm">{new Date(payment.created_at).toLocaleDateString()}</p>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase">{payment.description || 'Service Payment'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-sm">{formatCurrency(payment.amount_cents / 100)}</p>
+                          <span className="text-[9px] font-black uppercase text-emerald-400">Success</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

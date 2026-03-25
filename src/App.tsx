@@ -12,8 +12,8 @@ import UpdateDetail from './pages/UpdateDetail';
 import SingleUpdate from './pages/SingleUpdate';
 import TrackedSources from './pages/TrackedSources';
 import RealTimeScans from './pages/RealTimeScans';
-import Archive from './pages/Archive';
-import Favorites from './pages/Favorites';
+import Vault from './pages/Vault';
+import Favourites from './pages/Favourites';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing';
 import Admin from './pages/Admin';
@@ -85,18 +85,18 @@ function App() {
             }
           />
           <Route
-            path="/archive"
+            path="/vault"
             element={
               <ProtectedRoute>
-                <Archive />
+                <Vault />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/favorites"
+            path="/favourites"
             element={
               <ProtectedRoute>
-                <Favorites />
+                <Favourites />
               </ProtectedRoute>
             }
           />

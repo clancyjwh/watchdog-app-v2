@@ -1,11 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { getTopicSuggestions, getSourceSuggestions } from '../utils/mockAI';
+import { getTopicSuggestions } from '../utils/mockAI';
 import { getTopicSuggestionsFromAI, getSourceSuggestionsFromAI, SourceSuggestion } from '../utils/perplexity';
 import { generateMockUpdates } from '../utils/mockUpdates';
-import { Activity, Check, ChevronRight, ChevronLeft, Plus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, BarChart, Megaphone, Building2, Briefcase, AlertCircle } from 'lucide-react';
+import { 
+  Building2, 
+  Target, 
+  Plus, 
+  Search, 
+  Check, 
+  ChevronRight, 
+  ChevronLeft, 
+  Globe, 
+  Zap, 
+  AlertCircle,
+  Activity,
+  DollarSign as Grant,
+  DollarSign,
+  Newspaper,
+  Rocket,
+  FileText,
+  BarChart,
+  Megaphone,
+  Briefcase,
+  X,
+  Sparkles
+} from 'lucide-react';
+import Sidebar from '../components/Sidebar';
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -173,7 +196,7 @@ export default function AddCompany() {
 
       if (aiSources && aiSources.length > 0) {
         const newSources = aiSources.filter(
-          (newSource) => !suggestedSources.some((existing) => existing.url === newSource.url)
+          (newSource: SourceSuggestion) => !suggestedSources.some((existing: SourceSuggestion) => existing.url === newSource.url)
         );
 
         if (newSources.length > 0) {
@@ -198,7 +221,7 @@ export default function AddCompany() {
 
   const calculatePricing = () => {
     const basePrices = { monthly: 29, biweekly: 49, weekly: 69 };
-    const basePrice = basePrices[frequency];
+    const basePrice = basePrices[frequency as keyof typeof basePrices];
     const sourceCost = selectedSources.length * 3;
     const contentTypeCost = selectedContentTypes.length * 5;
     const analysisCost = analysisDepth === 'deep' ? 25 : 0;
@@ -211,13 +234,13 @@ export default function AddCompany() {
 
   const handleNext = async () => {
     if (currentStep < 7) {
-      setCurrentStep((prev) => (prev + 1) as Step);
+      setCurrentStep((prev: Step) => (prev + 1) as Step);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep((prev) => (prev - 1) as Step);
+      setCurrentStep((prev: Step) => (prev - 1) as Step);
     }
   };
 
@@ -276,7 +299,7 @@ export default function AddCompany() {
           is_core_source: true,
         }).select();
         if (error) throw new Error(`Failed to save sources: ${error.message}`);
-        if (data) sourcesData.push(data[0]);
+        if (data) sourcesData.push(data[0] as any);
       }
 
       for (const competitor of competitors) {
@@ -338,7 +361,7 @@ export default function AddCompany() {
           },
           body: JSON.stringify({
             topics: selectedTopics,
-            sources: sourcesData.map(s => ({
+            sources: sourcesData.map((s: any) => ({
               name: s.name,
               url: s.url,
               rss_feed_url: s.rss_feed_url
@@ -402,8 +425,8 @@ export default function AddCompany() {
         }
 
         const researchTopics = [
-          ...selectedTopics.map(t => ({ topic: t, tags: [] })),
-          ...competitors.map(c => ({ topic: c, tags: ['Competitor'] }))
+          ...selectedTopics.map((t: string) => ({ topic: t, tags: [] })),
+          ...competitors.map((c: string) => ({ topic: c, tags: ['Competitor'] }))
         ];
 
         fetch(`${supabaseUrl}/functions/v1/generate-background-research`, {
@@ -432,48 +455,48 @@ export default function AddCompany() {
   };
 
   const toggleTopic = (topic: string) => {
-    setSelectedTopics((prev) =>
-      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic]
+    setSelectedTopics((prev: string[]) =>
+      prev.includes(topic) ? prev.filter((t: string) => t !== topic) : [...prev, topic]
     );
   };
 
   const addCustomTopic = () => {
     if (customTopic.trim()) {
-      setSelectedTopics((prev) => [...prev, customTopic.trim()]);
+      setSelectedTopics((prev: string[]) => [...prev, customTopic.trim()]);
       setCustomTopic('');
     }
   };
 
   const toggleSource = (source: SourceSuggestion) => {
-    setSelectedSources((prev) =>
-      prev.find((s) => s.url === source.url)
-        ? prev.filter((s) => s.url !== source.url)
+    setSelectedSources((prev: SourceSuggestion[]) =>
+      prev.find((s: SourceSuggestion) => s.url === source.url)
+        ? prev.filter((s: SourceSuggestion) => s.url !== source.url)
         : [...prev, source]
     );
   };
 
   const addCustomSource = () => {
     if (customSource.name.trim() && customSource.url.trim()) {
-      setSelectedSources((prev) => [...prev, customSource]);
+      setSelectedSources((prev: SourceSuggestion[]) => [...prev, customSource]);
       setCustomSource({ name: '', url: '', description: '', category: '', rssFeedUrl: '' });
     }
   };
 
   const toggleContentType = (typeId: string) => {
-    setSelectedContentTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
+    setSelectedContentTypes((prev: string[]) =>
+      prev.includes(typeId) ? prev.filter((t: string) => t !== typeId) : [...prev, typeId]
     );
   };
 
   const addCompetitor = () => {
     if (competitorInput.trim()) {
-      setCompetitors((prev) => [...prev, competitorInput.trim()]);
+      setCompetitors((prev: string[]) => [...prev, competitorInput.trim()]);
       setCompetitorInput('');
     }
   };
 
   const removeCompetitor = (index: number) => {
-    setCompetitors((prev) => prev.filter((_, i) => i !== index));
+    setCompetitors((prev: string[]) => prev.filter((_: string, i: number) => i !== index));
   };
 
   const addKeyword = () => {
@@ -484,7 +507,7 @@ export default function AddCompany() {
   };
 
   const removeKeyword = (index: number) => {
-    setKeywords((prev) => prev.filter((_, i) => i !== index));
+    setKeywords((prev: string[]) => prev.filter((_: string, i: number) => i !== index));
   };
 
   const canProceed = () => {
@@ -511,58 +534,77 @@ export default function AddCompany() {
   const pricing = calculatePricing();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-xl">
-              <Activity className="w-6 h-6 text-white" />
-            </div>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              Cancel
-            </button>
-          </div>
+    <div className="flex h-screen bg-[#020617] text-slate-200 overflow-hidden font-sans selection:bg-blue-500/30">
+      <Sidebar />
+      
+      <div className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar relative">
+        {/* Background glow effects */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-          <div className="flex items-center justify-between mb-4">
-            {[1, 2, 3, 4, 5, 6, 7].map((step) => (
-              <div key={step} className="flex-1 flex items-center">
-                <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm transition-all ${
-                    step < currentStep
-                      ? 'bg-green-500 text-white'
-                      : step === currentStep
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {step < currentStep ? <Check className="w-4 h-4" /> : step}
+        <div className="max-w-5xl mx-auto w-full px-12 py-16 flex flex-col min-h-full">
+          {/* Header & Steps */}
+          <div className="mb-16">
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20">
+                  <Plus className="w-6 h-6 text-white" strokeWidth={3} />
                 </div>
-                {step < 7 && (
-                  <div
-                    className={`flex-1 h-1 mx-1 transition-all ${
-                      step < currentStep ? 'bg-green-500' : 'bg-gray-200'
-                    }`}
-                  />
-                )}
+                <div>
+                  <h1 className="text-2xl font-black text-white tracking-tight uppercase">New <span className="text-blue-500">Intelligence</span></h1>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Deploying a new monitoring node</p>
+                </div>
               </div>
-            ))}
+              
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-6 py-3 bg-slate-900/50 border border-slate-800/50 text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 hover:text-white transition-all"
+              >
+                Abort Deployment
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-6 px-2">
+              {[1, 2, 3, 4, 5, 6, 7].map((step) => (
+                <div key={step} className="flex-1 flex items-center group">
+                  <div
+                    className={`flex items-center justify-center w-10 h-10 rounded-2xl font-black text-xs transition-all duration-500 relative ${
+                      step < currentStep
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                        : step === currentStep
+                        ? 'bg-white text-slate-900 shadow-2xl shadow-white/10 ring-4 ring-blue-600/20'
+                        : 'bg-slate-900 border border-slate-800 text-slate-600'
+                    }`}
+                  >
+                    {step < currentStep ? <Check className="w-5 h-5" strokeWidth={4} /> : step}
+                    
+                    {step === currentStep && (
+                      <div className="absolute -bottom-1.5 w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+                    )}
+                  </div>
+                  {step < 7 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-3 transition-all duration-700 rounded-full ${
+                        step < currentStep ? 'bg-blue-600' : 'bg-slate-800'
+                      }`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">
+              <span className={currentStep === 1 ? 'text-blue-400' : ''}>Business</span>
+              <span className={currentStep === 2 ? 'text-blue-400' : ''}>Location</span>
+              <span className={currentStep === 3 ? 'text-blue-400' : ''}>Topics</span>
+              <span className={currentStep === 4 ? 'text-blue-400' : ''}>Sources</span>
+              <span className={currentStep === 5 ? 'text-blue-400' : ''}>Content</span>
+              <span className={currentStep === 6 ? 'text-blue-400' : ''}>Config</span>
+              <span className={currentStep === 7 ? 'text-blue-400' : ''}>Review</span>
+            </div>
           </div>
 
-          <div className="flex justify-between text-xs text-gray-600 px-1">
-            <span className="text-center">Business</span>
-            <span className="text-center">Location</span>
-            <span className="text-center">Topics</span>
-            <span className="text-center">Sources</span>
-            <span className="text-center">Content</span>
-            <span className="text-center">Config</span>
-            <span className="text-center">Review</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-8 min-h-[500px]">
+          <div className="flex-1 flex flex-col">
           {aiError && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -570,926 +612,767 @@ export default function AddCompany() {
             </div>
           )}
 
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Tell us about this business</h2>
-                <p className="text-gray-600">Help us understand what this company does so we can suggest relevant monitoring topics</p>
-              </div>
+            {currentStep === 1 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Identify the <span className="text-blue-500">Target.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">Establish the core identity of the business unit. Our AI uses this to calibrate the entire monitoring mesh.</p>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                  placeholder="Acme Inc."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Business Description</label>
-                <textarea
-                  value={businessDescription}
-                  onChange={(e) => setBusinessDescription(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none resize-none"
-                  placeholder="What does this company do?"
-                />
-                <p className="mt-2 text-xs text-blue-600 font-medium">
-                  Tip: The more detail you provide, the more tailored and relevant your results will be. Include specifics about products, services, and target market.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Industry</label>
-                <select
-                  value={industry}
-                  onChange={(e) => setIndustry(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                >
-                  <option value="">Select industry</option>
-                  {INDUSTRY_OPTIONS.map((ind) => (
-                    <option key={ind} value={ind}>
-                      {ind}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">What do you want to monitor?</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {MONITORING_GOALS.map((goal) => (
-                    <label
-                      key={goal}
-                      className="flex items-start gap-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Company Identity</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                        <Building2 className="w-5 h-5 text-slate-600 group-focus-within:text-blue-500 transition-colors" />
+                      </div>
                       <input
-                        type="checkbox"
-                        checked={monitoringGoals.includes(goal)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setMonitoringGoals([...monitoringGoals, goal]);
-                          } else {
-                            setMonitoringGoals(monitoringGoals.filter(g => g !== goal));
-                          }
-                        }}
-                        className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                        type="text"
+                        value={companyName}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCompanyName(e.target.value)}
+                        className="w-full pl-14 pr-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none"
+                        placeholder="e.g. Black Swan Automations"
                       />
-                      <span className="text-sm text-gray-700">{goal}</span>
-                    </label>
-                  ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Market Sector</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                        <Activity className="w-5 h-5 text-slate-600 group-focus-within:text-blue-500 transition-colors" />
+                      </div>
+                      <select
+                        value={industry}
+                        onChange={(e: ChangeEvent<HTMLSelectElement>) => setIndustry(e.target.value)}
+                        className="w-full pl-14 pr-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold appearance-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none"
+                      >
+                        <option value="" className="bg-slate-950">Select Sector</option>
+                        {INDUSTRY_OPTIONS.map((ind) => (
+                          <option key={ind} value={ind} className="bg-slate-950">
+                            {ind}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Mission Profile (Business Description)</label>
+                  <div className="relative group">
+                    <textarea
+                      value={businessDescription}
+                      onChange={(e) => setBusinessDescription(e.target.value)}
+                      rows={4}
+                      className="w-full px-6 py-5 bg-slate-900/50 border border-slate-800 rounded-3xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none resize-none leading-relaxed"
+                      placeholder="Describe the company's core operations, products, and value proposition..."
+                    />
+                    <div className="absolute top-5 right-5 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                      <Zap className="w-4 h-4 text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                      Our Neural Engine uses this description to filter 99% of irrelevant noise.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Primary Monitoring Vectors</label>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {MONITORING_GOALS.map((goal) => {
+                      const isSelected = monitoringGoals.includes(goal);
+                      return (
+                        <label
+                          key={goal}
+                          className={`flex items-center gap-4 p-5 rounded-2xl border transition-all cursor-pointer group hover:scale-[1.02] active:scale-95 ${
+                            isSelected
+                              ? 'bg-blue-600/10 border-blue-500/50 shadow-lg shadow-blue-500/5'
+                              : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-blue-500 border-blue-500 shadow-md shadow-blue-500/20' : 'bg-slate-950 border-slate-700 group-hover:border-slate-500'
+                          }`}>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setMonitoringGoals([...monitoringGoals, goal]);
+                              } else {
+                                setMonitoringGoals(monitoringGoals.filter((g: string) => g !== goal));
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <span className={`text-xs font-black uppercase tracking-tight transition-colors ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                            {goal}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Tip:</strong> The more details you provide, the better our custom AI can recommend relevant sources and content for your needs.
-                </p>
-              </div>
-            </div>
-          )}
+            {currentStep === 2 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Geographic <span className="text-blue-500">Node Hub.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">Specify where this entity operates. Geographic pinpointing dramatically increases intelligence precision.</p>
+                </div>
 
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Help us tailor your monitoring</h2>
-                <p className="text-gray-600">Geographic focus and business context help us find the most relevant sources</p>
-              </div>
+                <div className="p-8 bg-blue-600/5 border border-blue-500/20 rounded-3xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                    <Search className="w-16 h-16 text-blue-400" />
+                  </div>
+                  <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-3">Neural Calibrator</h3>
+                  <p className="text-sm font-bold text-slate-400 leading-relaxed relative z-10">
+                    Our AI cross-references local laws, regional news outlets, and municipal updates based on these parameters. 
+                    <span className="text-white ml-1">Leaving fields blank will default to global monitoring.</span>
+                  </p>
+                </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Why location matters:</strong> AI uses this to filter geographically relevant sources, exclude irrelevant jurisdictions, and find region-specific opportunities.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Geographic Focus</label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Country/Region</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 text-center block">Country / Region</label>
                     <input
                       type="text"
                       value={locationCountry}
-                      onChange={(e) => setLocationCountry(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., Canada"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setLocationCountry(e.target.value)}
+                      className="w-full px-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none text-center"
+                      placeholder="CAN"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Province/State</label>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 text-center block">Province / State</label>
                     <input
                       type="text"
                       value={locationProvince}
-                      onChange={(e) => setLocationProvince(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., British Columbia"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setLocationProvince(e.target.value)}
+                      className="w-full px-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none text-center"
+                      placeholder="BC"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">City/Local</label>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 text-center block">City / Local</label>
                     <input
                       type="text"
                       value={locationCity}
-                      onChange={(e) => setLocationCity(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                      placeholder="e.g., Vancouver"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setLocationCity(e.target.value)}
+                      className="w-full px-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none text-center"
+                      placeholder="Vancouver"
                     />
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2 italic">Example: "Vancouver, BC, Canada" ensures you get local updates, not just national news</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Business Context</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { id: 'non-profit', label: 'Non-profit organization' },
-                    { id: 'government', label: 'Government/Public sector' },
-                    { id: 'b2b', label: 'B2B (business to business)' },
-                    { id: 'b2c', label: 'B2C (business to consumer)' },
-                    { id: 'startup', label: 'Startup/Early stage' },
-                    { id: 'enterprise', label: 'Enterprise/Large organization' },
-                    { id: 'regulated', label: 'Regulated industry' },
-                  ].map((context) => (
-                    <label
-                      key={context.id}
-                      className="flex items-start gap-3 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={businessContext.includes(context.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setBusinessContext([...businessContext, context.id]);
-                          } else {
-                            setBusinessContext(businessContext.filter(c => c !== context.id));
-                          }
-                        }}
-                        className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{context.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">What topics should we monitor?</h2>
-                <p className="text-gray-600">
-                  {aiLoading ? 'AI is generating personalized suggestions...' : 'Select from our suggestions or add your own'}
-                </p>
-              </div>
-
-              {aiLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    <p className="mt-4 text-gray-600">Analyzing the business...</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                {suggestedTopics.map((topic) => (
-                  <button
-                    key={topic}
-                    onClick={() => toggleTopic(topic)}
-                    className={`px-4 py-3 rounded-lg border-2 text-left transition-all ${
-                      selectedTopics.includes(topic)
-                        ? 'border-blue-600 bg-blue-50 text-blue-900'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{topic}</span>
-                      {selectedTopics.includes(topic) && <Check className="w-5 h-5 text-blue-600" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Add Custom Topic</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customTopic}
-                    onChange={(e) => setCustomTopic(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addCustomTopic()}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="e.g., Specific regulation or market segment"
-                  />
-                  <button
-                    onClick={addCustomTopic}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {selectedTopics.filter((t) => !suggestedTopics.includes(t)).length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Custom Topics</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTopics
-                      .filter((t) => !suggestedTopics.includes(t))
-                      .map((topic) => (
-                        <span
-                          key={topic}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-900 rounded-full text-sm"
+                <div className="space-y-6">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Operational Taxonomy (Business Context)</label>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { id: 'non-profit', label: 'Non-profit' },
+                      { id: 'government', label: 'Government' },
+                      { id: 'b2b', label: 'B2B Sector' },
+                      { id: 'b2c', label: 'B2C Sector' },
+                      { id: 'startup', label: 'Early Stage' },
+                      { id: 'enterprise', label: 'Enterprise' },
+                      { id: 'regulated', label: 'Regulated' },
+                    ].map((context) => {
+                      const isSelected = businessContext.includes(context.id);
+                      return (
+                        <label
+                          key={context.id}
+                          className={`flex items-center gap-4 p-5 rounded-2xl border transition-all cursor-pointer group hover:scale-[1.05] ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-500/20'
+                              : 'bg-slate-900/30 border-slate-800/50 hover:border-slate-700'
+                          }`}
                         >
-                          {topic}
-                          <button onClick={() => toggleTopic(topic)} className="hover:text-blue-600">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </span>
-                      ))}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (e.target.checked) {
+                                setBusinessContext([...businessContext, context.id]);
+                              } else {
+                                setBusinessContext(businessContext.filter((c: string) => c !== context.id));
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${isSelected ? 'text-white' : 'text-slate-500'}`}>
+                            {context.label}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
-                </>
-              )}
-            </div>
-          )}
-
-          {currentStep === 4 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Where should we monitor?</h2>
-                <p className="text-gray-600">
-                  {aiLoading ? 'AI is finding authoritative sources...' : 'Select relevant sources for your topics'}
-                </p>
               </div>
+            )}
 
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="flex-shrink-0 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center mt-0.5">
-                    <Activity className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-blue-900 mb-2">Comprehensive Monitoring Approach</p>
-                    <p className="text-sm text-blue-800 mb-3">
-                      We use a dual monitoring strategy to ensure you never miss important updates:
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 flex-shrink-0"></div>
-                        <p className="text-sm text-blue-800">
-                          <strong>Source Monitoring:</strong> Each source you select will be actively tracked for new content and changes, with updates delivered to your dashboard as soon as they're published.
-                        </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 flex-shrink-0"></div>
-                        <p className="text-sm text-blue-800">
-                          <strong>AI Web Scanning:</strong> Our AI continuously searches the broader internet for relevant updates beyond your monitored sources, ensuring comprehensive topic coverage.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-900">Source Monitoring Cost</span>
-                    <span className="text-sm font-bold text-blue-600">$3 per source/month</span>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    AI web scanning is included at no additional cost
+            {currentStep === 3 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Intelligence <span className="text-blue-500">Vectors.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">
+                    {aiLoading ? 'Our Neural Engine is synthesizing data...' : 'Select the specific signals you want to amplify. Precision here drives higher ROI.'}
                   </p>
                 </div>
-              </div>
 
-              {aiLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    <p className="mt-4 text-gray-600">Discovering sources...</p>
-                  </div>
-                </div>
-              ) : suggestedSources.length === 0 ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                    <Activity className="w-8 h-8 text-blue-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">We'll use AI web scanning instead</h3>
-                  <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
-                    We couldn't find specific sources that publish regular updates for your topics. That's okay - our AI will continuously scan the entire web to find the most relevant and recent updates for this business.
-                  </p>
-                  <div className="bg-white rounded-lg p-4 text-left max-w-md mx-auto mb-4">
-                    <p className="text-sm font-semibold text-gray-900 mb-2">What this means:</p>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>✓ Comprehensive AI-powered web scanning</li>
-                      <li>✓ Updates delivered to your dashboard in real-time</li>
-                      <li>✓ No additional source monitoring costs</li>
-                      <li>✓ All relevant content filtered to this business</li>
-                    </ul>
-                  </div>
-                  {selectedSources.length > 0 && (
-                    <div className="mt-6">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Your custom sources:</p>
-                      <div className="space-y-2">
-                        {selectedSources.map((source) => (
-                          <div key={source.url} className="bg-white rounded-lg p-3 text-left">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-gray-900">{source.name}</p>
-                              {source.category && (
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded">
-                                  {source.category}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-600 mt-1">{source.url}</p>
-                          </div>
-                        ))}
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-slate-900/20 border border-slate-800/50 rounded-3xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
+                    <div className="relative z-10 text-center">
+                      <div className="inline-flex items-center justify-center p-4 bg-blue-600/10 rounded-2xl border border-blue-500/20 mb-6 animate-bounce">
+                        <Zap className="w-10 h-10 text-blue-500" />
                       </div>
-                    </div>
-                  )}
-                  <div className="border-t border-blue-200 mt-6 pt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Add a Custom Source</label>
-                    <div className="space-y-3">
-                      <input
-                        type="text"
-                        value={customSource.name}
-                        onChange={(e) => setCustomSource({ ...customSource, name: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="Source name"
-                      />
-                      <input
-                        type="url"
-                        value={customSource.url}
-                        onChange={(e) => setCustomSource({ ...customSource, url: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="https://example.com"
-                      />
-                      <input
-                        type="text"
-                        value={customSource.category}
-                        onChange={(e) => setCustomSource({ ...customSource, category: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                        placeholder="Category (e.g., News, Grants, Regulations)"
-                      />
-                      <button
-                        onClick={addCustomSource}
-                        disabled={!customSource.name || !customSource.url}
-                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Add Source
-                      </button>
+                      <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">Analyzing Business DNA</h3>
+                      <p className="text-slate-500 font-bold">Identifying optimal monitoring channels for this profile...</p>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                {suggestedSources.map((source) => {
-                  const relevanceScore = source.relevanceScore || 8;
-                  const isSelected = selectedSources.find((s) => s.url === source.url);
-                  return (
-                  <button
-                    key={source.url}
-                    onClick={() => toggleSource(source)}
-                    className={`w-full px-4 py-4 rounded-lg border-2 text-left transition-all ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-semibold text-gray-900">{source.name}</h3>
-                          {source.category && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded">
-                              {source.category}
-                            </span>
-                          )}
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
-                            {relevanceScore}/10
-                          </span>
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded">
-                            $3/mo
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">{source.description}</p>
-                        <p className="text-xs text-blue-600 mt-1">{source.url}</p>
-                      </div>
-                      {isSelected && (
-                        <Check className="w-5 h-5 text-blue-600 flex-shrink-0 ml-2" />
-                      )}
-                    </div>
-                  </button>
-                );
-                })}
-              </div>
-
-              {selectedSources.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-blue-900">
-                        {selectedSources.length} {selectedSources.length === 1 ? 'source' : 'sources'} selected
-                      </p>
-                      <p className="text-xs text-blue-700 mt-0.5">
-                        Active monitoring + timely updates to your dashboard
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-blue-600">
-                        ${selectedSources.length * 3}/mo
-                      </p>
-                      <p className="text-xs text-blue-700">source monitoring</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t pt-6">
-                <div className="mb-6">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Want to see more sources?</p>
-                  <div className="flex flex-wrap gap-2">
-                    {['Grants', 'News', 'Legislation', 'Reports', 'Government'].map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => requestMoreSourcesByCategory(category)}
-                        disabled={requestingMoreSources}
-                        className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all text-sm font-medium border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {requestingMoreSources ? 'Loading...' : `${category}`}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Click to discover more sources in specific categories</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Add Custom Source</label>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={customSource.name}
-                    onChange={(e) => setCustomSource({ ...customSource, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Source name"
-                  />
-                  <input
-                    type="url"
-                    value={customSource.url}
-                    onChange={(e) => setCustomSource({ ...customSource, url: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="https://example.com"
-                  />
-                  <input
-                    type="text"
-                    value={customSource.category}
-                    onChange={(e) => setCustomSource({ ...customSource, category: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Category (e.g., News, Grants, Regulations)"
-                  />
-                  <input
-                    type="text"
-                    value={customSource.description}
-                    onChange={(e) => setCustomSource({ ...customSource, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Brief description"
-                  />
-                  <button
-                    onClick={addCustomSource}
-                    className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                  >
-                    Add Source
-                  </button>
-                </div>
-              </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {currentStep === 5 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">What types of information are you looking for?</h2>
-                <p className="text-gray-600">Select all content types you want to monitor</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {CONTENT_TYPES.map((type) => {
-                  const Icon = type.icon;
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => toggleContentType(type.id)}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
-                        selectedContentTypes.includes(type.id)
-                          ? 'border-blue-600 bg-blue-50'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-lg ${
-                          selectedContentTypes.includes(type.id)
-                            ? 'bg-blue-100 text-blue-600'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-900">{type.label}</span>
-                            {selectedContentTypes.includes(type.id) && (
-                              <Check className="w-5 h-5 text-blue-600" />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {currentStep === 6 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Configure your monitoring</h2>
-                <p className="text-gray-600">Customize how and when you receive updates</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Update Frequency</label>
-                  <div className="space-y-2">
-                    {(['weekly', 'biweekly', 'monthly'] as const).map((freq) => (
-                      <button
-                        key={freq}
-                        onClick={() => setFrequency(freq)}
-                        className={`w-full px-4 py-3 rounded-lg border-2 font-medium transition-all capitalize text-left ${
-                          frequency === freq
-                            ? 'border-blue-600 bg-blue-50 text-blue-900'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="capitalize">{freq === 'biweekly' ? 'Bi-Weekly' : freq}</span>
-                          <span className="text-sm font-semibold">${{ weekly: 69, biweekly: 49, monthly: 29 }[freq]}/mo base</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">AI Analysis Depth</label>
-                  <div className="space-y-2">
-                    {(['standard', 'deep'] as const).map((depth) => (
-                      <button
-                        key={depth}
-                        onClick={() => setAnalysisDepth(depth)}
-                        className={`w-full px-4 py-3 rounded-lg border-2 font-medium transition-all capitalize text-left ${
-                          analysisDepth === depth
-                            ? 'border-blue-600 bg-blue-50 text-blue-900'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{depth}</span>
-                          <span className="text-sm font-semibold">{depth === 'standard' ? 'Included' : '+$25/mo'}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Competitor Tracking</label>
-                <p className="text-sm text-gray-600 mb-3">
-                  Track mentions of competitors across all sources. We'll alert you when competitors make announcements, launch products, or appear in news coverage.
-                </p>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={competitorInput}
-                    onChange={(e) => setCompetitorInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addCompetitor()}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="Competitor name or website"
-                  />
-                  <button
-                    onClick={addCompetitor}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-                {competitors.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {competitors.map((competitor, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm"
-                      >
-                        {competitor}
-                        <button onClick={() => removeCompetitor(index)} className="hover:text-red-600">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Keyword Alerts</label>
-                <p className="text-sm text-gray-600 mb-3">
-                  Get notified whenever specific phrases appear in updates. Perfect for tracking regulatory terms, product names, or critical issues relevant to this business.
-                </p>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={keywordInput}
-                    onChange={(e) => setKeywordInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addKeyword()}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                    placeholder="e.g., carbon tax, GDPR, new regulations"
-                  />
-                  <button
-                    onClick={addKeyword}
-                    className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-                {keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.map((keyword, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-900 rounded-full text-sm"
-                      >
-                        {keyword}
-                        <button onClick={() => removeKeyword(index)} className="hover:text-red-600">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Results Per Scan: <span className="text-blue-600 font-semibold">{resultsPerScan}</span>
-                </label>
-                <p className="text-sm text-gray-600 mb-3">
-                  Choose how many of the most relevant articles you want per scan. Higher numbers may take longer but provide more comprehensive coverage.
-                </p>
-                <div className="grid grid-cols-4 gap-3">
-                  {[5, 10, 20, 50].map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => setResultsPerScan(count)}
-                      className={`px-4 py-3 rounded-lg border-2 font-medium transition-all text-center ${
-                        resultsPerScan === count
-                          ? 'border-blue-600 bg-blue-50 text-blue-900'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Top {count}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Recommended: 10-20 articles for most businesses</p>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 7 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Review & Confirm</h2>
-                <p className="text-gray-600">Confirm your selections and understand the billing</p>
-              </div>
-
-              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-red-900 mb-2">Important Billing Notice</h3>
-                    <p className="text-sm text-red-800 mb-4">
-                      By adding this company, you will be charged an additional subscription fee. Each company you monitor has its own separate subscription with its own pricing based on your configuration choices.
-                    </p>
-                    <div className="bg-white rounded-lg p-4 mb-4">
-                      <p className="text-sm font-semibold text-gray-900 mb-2">You will be charged:</p>
-                      <div className="text-2xl font-bold text-red-600 mb-1">
-                        ${pricing.monthly}/month
-                      </div>
-                      <p className="text-xs text-gray-600">for {companyName}</p>
-                    </div>
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={billingAcknowledged}
-                        onChange={(e) => setBillingAcknowledged(e.target.checked)}
-                        className="mt-0.5 h-5 w-5 text-red-600 border-gray-300 rounded focus:ring-2 focus:ring-red-500"
-                      />
-                      <span className="text-sm text-red-900 font-medium">
-                        I understand that I will be billed ${pricing.monthly}/month for this company in addition to any other companies I'm monitoring.
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Business Profile</h3>
-                    <p className="text-sm text-gray-600">{companyName}</p>
-                    <p className="text-sm text-gray-600">{industry}</p>
-                    {(locationCity || locationProvince || locationCountry) && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        {[locationCity, locationProvince, locationCountry].filter(Boolean).join(', ')}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Topics ({selectedTopics.length})</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedTopics.slice(0, 5).map((topic) => (
-                        <span key={topic} className="text-xs px-2 py-1 bg-blue-100 text-blue-900 rounded">
-                          {topic}
-                        </span>
-                      ))}
-                      {selectedTopics.length > 5 && (
-                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                          +{selectedTopics.length - 5} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Sources ({selectedSources.length})</h3>
-                    <div className="space-y-1">
-                      {selectedSources.slice(0, 3).map((source) => (
-                        <p key={source.url} className="text-sm text-gray-600">
-                          {source.name}
-                        </p>
-                      ))}
-                      {selectedSources.length > 3 && (
-                        <p className="text-sm text-gray-500">+{selectedSources.length - 3} more</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Content Types ({selectedContentTypes.length})</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedContentTypes.map((typeId) => {
-                        const type = CONTENT_TYPES.find((t) => t.id === typeId);
+                ) : (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-2 gap-4">
+                      {suggestedTopics.map((topic) => {
+                        const isSelected = selectedTopics.includes(topic);
                         return (
-                          <span
-                            key={typeId}
-                            className="text-xs px-3 py-1.5 bg-blue-100 text-blue-900 rounded-full font-medium"
+                          <button
+                            key={topic}
+                            onClick={() => toggleTopic(topic)}
+                            className={`flex items-center justify-between px-6 py-5 rounded-2xl border transition-all group ${
+                              isSelected
+                                ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-500/20 scale-[1.02]'
+                                : 'bg-slate-900/30 border-slate-800/50 hover:border-slate-700 hover:bg-slate-800/50'
+                            }`}
                           >
-                            {type?.label}
-                          </span>
+                            <span className={`text-sm font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                              {topic}
+                            </span>
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                              isSelected ? 'bg-white border-white' : 'bg-slate-950 border-slate-700'
+                            }`}>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={4} />}
+                            </div>
+                          </button>
                         );
                       })}
                     </div>
-                  </div>
 
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Configuration</h3>
-                    <p className="text-sm text-gray-600 capitalize">Frequency: {frequency}</p>
-                    <p className="text-sm text-gray-600 capitalize">Analysis: {analysisDepth}</p>
-                    <p className="text-sm text-gray-600">Delivery: Dashboard</p>
-                    <p className="text-sm text-gray-600">First scan: Immediately after setup</p>
-                  </div>
-                </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Inject Custom Vector</label>
+                      <div className="flex gap-3">
+                        <div className="relative flex-1 group">
+                          <input
+                            type="text"
+                            value={customTopic}
+                            onChange={(e) => setCustomTopic(e.target.value)}
+                            onKeyPress={(e: React.KeyboardEvent) => e.key === 'Enter' && addCustomTopic()}
+                            className="w-full px-6 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white font-bold placeholder:text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all outline-none"
+                            placeholder="Specify unique monitoring requirement..."
+                          />
+                        </div>
+                        <button
+                          onClick={addCustomTopic}
+                          className="px-8 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95"
+                        >
+                          Inject
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6">
-                  <div className="flex items-center justify-center w-12 h-12 bg-white rounded-xl mb-4">
-                    <DollarSign className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Monthly Cost Breakdown</h3>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Base ({frequency === 'biweekly' ? 'Bi-Weekly' : frequency})</span>
-                      <span className="font-semibold">${{ weekly: 69, biweekly: 49, monthly: 29 }[frequency]}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">{selectedSources.length} sources</span>
-                      <span className="font-semibold">${selectedSources.length * 3}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">{selectedContentTypes.length} content types</span>
-                      <span className="font-semibold">${selectedContentTypes.length * 5}</span>
-                    </div>
-                    {analysisDepth === 'deep' && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Deep analysis</span>
-                        <span className="font-semibold">$25</span>
+                    {selectedTopics.filter((t) => !suggestedTopics.includes(t)).length > 0 && (
+                      <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Custom Vector Stack</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTopics
+                            .filter((t) => !suggestedTopics.includes(t))
+                            .map((topic) => (
+                              <div
+                                key={topic}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/30 text-blue-400 rounded-xl text-xs font-black uppercase tracking-tight"
+                              >
+                                {topic}
+                                <button onClick={() => toggleTopic(topic)} className="hover:text-blue-300 transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Dashboard delivery</span>
-                      <span>Included</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Data <span className="text-blue-500">Pipeline.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">
+                    {aiLoading ? 'Calibrating sensory arrays...' : 'Select the primary sources for automated surveillance. Web Scanning is active by default.'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="p-8 bg-blue-600/5 border border-blue-500/20 rounded-3xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                      <Globe className="w-20 h-20 text-blue-400" />
+                    </div>
+                    <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-4">Neural Mesh (Standard)</h3>
+                    <p className="text-sm font-bold text-slate-300 leading-relaxed mb-6">
+                      Our AI continuously scans 10M+ data points across the global web for your specific monitoring vectors.
+                    </p>
+                    <div className="flex items-center gap-2 text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 w-fit px-3 py-1 rounded-full border border-blue-500/20">
+                      <Check className="w-3 h-3" />
+                      Active by default
                     </div>
                   </div>
 
-                  <div className="border-t border-blue-200 pt-4 mb-4">
-                    <button
-                      onClick={() => setShowAnnual(!showAnnual)}
-                      className="flex items-center justify-between w-full text-sm mb-2"
-                    >
-                      <span className="text-gray-600">Billing</span>
-                      <span className="text-blue-600 font-medium">
-                        {showAnnual ? 'Annual' : 'Monthly'}
-                      </span>
-                    </button>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-2xl font-bold text-gray-900">
-                        ${showAnnual ? pricing.annual.toFixed(0) : pricing.monthly.toFixed(0)}
-                      </span>
-                      <span className="text-gray-600">
-                        /{showAnnual ? 'year' : 'month'}
-                      </span>
+                  <div className="p-8 bg-blue-600/10 border border-blue-500/40 rounded-3xl relative overflow-hidden group shadow-lg shadow-blue-500/10">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                      <Target className="w-20 h-20 text-blue-400" />
                     </div>
-                    {showAnnual && (
-                      <p className="text-xs text-green-600 mt-1">Save 25% with annual billing</p>
-                    )}
+                    <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-4">Targeted Monitoring</h3>
+                    <p className="text-sm font-bold text-slate-200 leading-relaxed mb-6">
+                      Add specific authoritative sources (Gov, Legal, Press) for deterministic priority monitoring.
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] font-black text-white uppercase tracking-widest">
+                        Cost: $3 / source
+                      </div>
+                      <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest animate-pulse">
+                        Selected: {selectedSources.length}
+                      </div>
+                    </div>
                   </div>
+                </div>
 
-                  <button
-                    onClick={() => setShowAnnual(!showAnnual)}
-                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Switch to {showAnnual ? 'monthly' : 'annual'} billing
-                  </button>
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-slate-900/20 border border-slate-800/50 rounded-3xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
+                    <div className="relative z-10 text-center">
+                      <div className="inline-flex items-center justify-center p-4 bg-blue-600/10 rounded-2xl border border-blue-500/20 mb-6 animate-pulse">
+                        <Search className="w-10 h-10 text-blue-500" />
+                      </div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-widest mb-2">Scanning Web Archives</h3>
+                      <p className="text-slate-500 font-bold">Pinpointing authoritative domains for your sector...</p>
+                    </div>
+                  </div>
+                ) : suggestedSources.length === 0 ? (
+                  <div className="p-12 bg-slate-900/40 border border-slate-800/80 rounded-3xl text-center flex flex-col items-center">
+                    <div className="w-20 h-20 bg-blue-600/10 rounded-2xl border border-blue-500/20 flex items-center justify-center mb-6">
+                      <Zap className="w-10 h-10 text-blue-500" />
+                    </div>
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Universal Coverage Target Reached.</h3>
+                    <p className="text-slate-400 font-bold max-w-lg mb-8">
+                      We didn't find specific low-noise sources. Our AI will utilize its <span className="text-blue-500">Universal Mesh</span> to track these topics across the entire open web.
+                    </p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                      {[
+                        'Comprehensive Web Scanning',
+                        'Real-time Result Injection',
+                        'Zero Additional Overhead',
+                        'Intelligent Sector Filtering'
+                      ].map(feature => (
+                        <div key={feature} className="p-4 bg-slate-950/50 border border-slate-800/50 rounded-xl text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                          {feature}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {suggestedSources.map((source) => {
+                        const isSelected = selectedSources.find((s) => s.url === source.url);
+                        return (
+                          <button
+                            key={source.url}
+                            onClick={() => toggleSource(source)}
+                            className={`flex flex-col gap-3 p-6 rounded-2xl border text-left transition-all group ${
+                              isSelected
+                                ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-500/20 scale-[1.02]'
+                                : 'bg-slate-900/30 border-slate-800/50 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <h3 className={`font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-slate-200'}`}>{source.name}</h3>
+                              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                                isSelected ? 'bg-white border-white' : 'bg-slate-950 border-slate-700'
+                              }`}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={4} />}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {source.category && (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${isSelected ? 'bg-white/20 text-white' : 'bg-blue-600/10 text-blue-400 border border-blue-500/20'}`}>
+                                  {source.category}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${isSelected ? 'bg-white/10 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                                Score: {source.relevanceScore || 8}/10
+                              </span>
+                            </div>
+                            <p className={`text-sm font-bold leading-relaxed line-clamp-2 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>{source.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="p-10 bg-slate-900/50 border border-slate-800 rounded-3xl">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Manual Source Injection</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <input
+                          type="text"
+                          value={customSource.name}
+                          onChange={(e) => setCustomSource({ ...customSource, name: e.target.value })}
+                          className="w-full px-6 py-4 bg-slate-950 border border-slate-800 rounded-xl text-white font-bold placeholder:text-slate-800 focus:border-blue-500/50 outline-none transition-all"
+                          placeholder="Source Name"
+                        />
+                        <input
+                          type="url"
+                          value={customSource.url}
+                          onChange={(e) => setCustomSource({ ...customSource, url: e.target.value })}
+                          className="w-full px-6 py-4 bg-slate-950 border border-slate-800 rounded-xl text-white font-bold placeholder:text-slate-800 focus:border-blue-500/50 outline-none transition-all"
+                          placeholder="https://authoritative-domain.com"
+                        />
+                      </div>
+                      <button
+                        onClick={addCustomSource}
+                        disabled={!customSource.name || !customSource.url}
+                        className="w-full py-4 bg-slate-800 text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-600 hover:text-white transition-all disabled:opacity-30 active:scale-[0.99]"
+                      >
+                        Add to Monitoring Mesh
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentStep === 5 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Signal <span className="text-blue-500">Taxonomy.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">Select the specific transmission formats our AI should monitor. Diversification increases intelligence depth.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {CONTENT_TYPES.map((type) => {
+                    const Icon = type.icon;
+                    const isSelected = selectedContentTypes.includes(type.id);
+                    return (
+                      <button
+                        key={type.id}
+                        onClick={() => toggleContentType(type.id)}
+                        className={`p-6 rounded-2xl border transition-all text-left flex flex-col gap-4 group hover:scale-[1.02] active:scale-95 ${
+                          isSelected
+                            ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-500/20'
+                            : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-800/50 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <div className={`p-3 rounded-xl transition-colors ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-blue-600/10 text-blue-500 border border-blue-500/20'
+                          }`}>
+                            <Icon className="w-6 h-6" />
+                          </div>
+                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-white border-white' : 'bg-slate-950 border-slate-700'
+                          }`}>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={4} />}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className={`text-sm font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                            {type.label}
+                          </h4>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                            Surveillance active
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        {finishError && (
-          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-red-900 mb-1">Setup Error</p>
-              <p className="text-sm text-red-800">{finishError}</p>
-            </div>
-            <button
-              onClick={() => setFinishError('')}
-              className="text-red-600 hover:text-red-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {currentStep === 6 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Sync <span className="text-blue-500">Parameters.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">Configure the cadence and depth of the Neural Engine. High-frequency scans provide the sharpest edge.</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Update Cadence</label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {(['weekly', 'biweekly', 'monthly'] as const).map((freq) => (
+                        <button
+                          key={freq}
+                          onClick={() => setFrequency(freq)}
+                          className={`flex items-center justify-between px-6 py-5 rounded-2xl border transition-all group ${
+                            frequency === freq
+                              ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-500/20'
+                              : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-800/50 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                              frequency === freq ? 'bg-white/20' : 'bg-slate-950 border border-slate-800'
+                            }`}>
+                              <Activity className={`w-5 h-5 ${frequency === freq ? 'text-white' : 'text-slate-600'}`} />
+                            </div>
+                            <span className={`text-sm font-black uppercase tracking-tight ${frequency === freq ? 'text-white' : 'text-slate-400'}`}>
+                              {freq === 'biweekly' ? 'Bi-Weekly' : freq}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-sm font-black ${frequency === freq ? 'text-white' : 'text-blue-500'}`}>
+                              ${{ weekly: 69, biweekly: 49, monthly: 29 }[freq]}
+                            </div>
+                            <div className={`text-[10px] uppercase font-black tracking-widest ${frequency === freq ? 'text-blue-100' : 'text-slate-600'}`}>
+                              / Month
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Analysis Protocol</label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {(['standard', 'deep'] as const).map((depth) => (
+                        <button
+                          key={depth}
+                          onClick={() => setAnalysisDepth(depth)}
+                          className={`flex items-center justify-between px-6 py-5 rounded-2xl border transition-all group ${
+                            analysisDepth === depth
+                              ? 'bg-blue-600 border-blue-500 shadow-xl shadow-blue-500/20'
+                              : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-800/50 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                              analysisDepth === depth ? 'bg-white/20' : 'bg-slate-950 border border-slate-800'
+                            }`}>
+                              {depth === 'deep' ? <Rocket className={`w-5 h-5 ${analysisDepth === depth ? 'text-white' : 'text-slate-600'}`} /> : <Zap className={`w-5 h-5 ${analysisDepth === depth ? 'text-white' : 'text-slate-600'}`} />}
+                            </div>
+                            <span className={`text-sm font-black uppercase tracking-tight ${analysisDepth === depth ? 'text-white' : 'text-slate-400'}`}>
+                              {depth} Protocol
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-sm font-black ${analysisDepth === depth ? 'text-white' : 'text-blue-500'}`}>
+                              {depth === 'standard' ? 'Included' : '+$25'}
+                            </div>
+                            <div className={`text-[10px] uppercase font-black tracking-widest ${analysisDepth === depth ? 'text-blue-100' : 'text-slate-600'}`}>
+                              {depth === 'standard' ? 'Default' : '/ Month'}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Competitor Intercepts</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={competitorInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCompetitorInput(e.target.value)}
+                        onKeyPress={(e: React.KeyboardEvent) => e.key === 'Enter' && addCompetitor()}
+                        className="flex-1 px-6 py-4 bg-slate-900/50 border border-slate-800 rounded-xl text-white font-bold placeholder:text-slate-800 focus:border-blue-500/50 outline-none transition-all"
+                        placeholder="Intercept entity..."
+                      />
+                      <button onClick={addCompetitor} className="p-4 bg-slate-800 text-slate-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {competitors.map((c, i) => (
+                        <div key={i} className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase flex items-center gap-2">
+                          {c}
+                          <button onClick={() => removeCompetitor(i)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Keyword Triggers</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={keywordInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeywordInput(e.target.value)}
+                        onKeyPress={(e: React.KeyboardEvent) => e.key === 'Enter' && addKeyword()}
+                        className="flex-1 px-6 py-4 bg-slate-900/50 border border-slate-800 rounded-xl text-white font-bold placeholder:text-slate-800 focus:border-blue-500/50 outline-none transition-all"
+                        placeholder="Keyword trigger..."
+                      />
+                      <button onClick={addKeyword} className="p-4 bg-slate-800 text-slate-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {keywords.map((k, i) => (
+                        <div key={i} className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg text-[10px] font-black uppercase flex items-center gap-2">
+                          {k}
+                          <button onClick={() => removeKeyword(i)} className="hover:text-blue-300"><X className="w-3 h-3" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 7 && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div>
+                  <h2 className="text-5xl font-black text-white tracking-tighter mb-4 leading-tight">Final <span className="text-blue-500">Review.</span></h2>
+                  <p className="text-lg font-bold text-slate-400 leading-relaxed max-w-2xl">Confirm your intelligence configuration. All parameters can be modified later in the command console.</p>
+                </div>
+
+                <div className="p-8 bg-red-600/10 border border-red-500/30 rounded-3xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <AlertCircle className="w-20 h-20 text-red-500" />
+                  </div>
+                  <h3 className="text-xs font-black text-red-500 uppercase tracking-widest mb-4">Subscription Protocol</h3>
+                  <p className="text-sm font-black text-slate-200 leading-relaxed mb-6 max-w-xl">
+                    By initializing this entity, you authorize an additional recurring charge of <span className="text-red-500">${pricing.monthly}/mo</span>.
+                  </p>
+                  <label className="flex items-center gap-4 group cursor-pointer">
+                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                      billingAcknowledged ? 'bg-red-600 border-red-600 shadow-lg shadow-red-500/20' : 'bg-slate-950 border-slate-800 group-hover:border-red-500/50'
+                    }`}>
+                      {billingAcknowledged && <Check className="w-4 h-4 text-white" strokeWidth={4} />}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={billingAcknowledged}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBillingAcknowledged(e.target.checked)}
+                      className="hidden"
+                    />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-red-500 transition-colors">
+                      Authorize billing for {companyName || 'this entity'}
+                    </span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Target Profile</h4>
+                      <p className="text-xl font-black text-white tracking-tight">{companyName}</p>
+                      <p className="text-sm font-bold text-blue-500 mt-1 uppercase tracking-widest">{industry}</p>
+                    </div>
+
+                    <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Active Vectors ({selectedTopics.length})</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTopics.map(t => (
+                          <span key={t} className="px-3 py-1 bg-slate-950 border border-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-tight">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-8 bg-blue-600/5 border border-blue-500/20 rounded-3xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                      <DollarSign className="w-24 h-24 text-blue-400" />
+                    </div>
+                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">Financial Summary</h4>
+                    <div className="space-y-4 mb-8">
+                      <div className="flex justify-between items-center py-3 border-b border-slate-800">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Base Protocol</span>
+                        <span className="text-sm font-black text-white">${{ weekly: 69, biweekly: 49, monthly: 29 }[frequency]}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-slate-800">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Domain Hooks ({selectedSources.length})</span>
+                        <span className="text-sm font-black text-white">${selectedSources.length * 3}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-slate-800">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Signal Types ({selectedContentTypes.length})</span>
+                        <span className="text-sm font-black text-white">${selectedContentTypes.length * 5}</span>
+                      </div>
+                      {analysisDepth === 'deep' && (
+                        <div className="flex justify-between items-center py-3 border-b border-slate-800">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Deep Analysis</span>
+                          <span className="text-sm font-black text-white">$25</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Monthly Aggregate</p>
+                        <p className="text-4xl font-black text-white tracking-tighter">${pricing.monthly.toFixed(0)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">Annual Savings</p>
+                        <p className="text-sm font-black text-blue-400">-$240.00 / yr</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        <div className="flex justify-between mt-6">
-          <button
-            onClick={handleBack}
-            disabled={currentStep === 1 || loading}
-            className="px-6 py-3 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Back
-          </button>
+          <div className="p-10 border-t border-slate-800 flex items-center justify-between">
+            <button
+              onClick={handleBack}
+              disabled={currentStep === 1 || loading}
+              className="px-8 py-4 text-slate-500 font-black text-sm uppercase tracking-widest hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-3"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              Return
+            </button>
 
-          {currentStep < 7 ? (
-            <button
-              onClick={handleNext}
-              disabled={!canProceed() || loading}
-              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? 'Saving...' : 'Continue'}
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          ) : (
-            <button
-              onClick={handleFinish}
-              disabled={loading || !billingAcknowledged}
-              className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? 'Adding Company...' : 'Add Company & Start Monitoring'}
-              <Check className="w-5 h-5" />
-            </button>
-          )}
+            <div className="flex items-center gap-8">
+              <div className="hidden md:flex flex-col items-end">
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Protocol Progress</span>
+                <span className="text-sm font-black text-white">Step {currentStep} of 7</span>
+              </div>
+              
+              {currentStep < 7 ? (
+                <button
+                  onClick={handleNext}
+                  disabled={loading}
+                  className="px-10 py-5 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-500/20 flex items-center gap-3 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : 'Advance'}
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleFinish}
+                  disabled={loading || !billingAcknowledged}
+                  className="px-12 py-5 bg-gradient-to-r from-blue-600 to-blue-400 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-500/20 flex items-center gap-3 disabled:opacity-50"
+                >
+                  {loading ? 'Initializing Mesh...' : 'Initialize Monitoring'}
+                  <Sparkles className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,25 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Settings, 
-  Save, 
-  Loader, 
-  Plus, 
-  Building2, 
-  Sparkles, 
-  X, 
-  Briefcase, 
-  Globe, 
-  Target, 
-  Shield, 
-  Info,
-  ChevronRight,
-  LogOut,
-  CreditCard,
-  Zap,
-  Activity,
-  CheckCircle2,
-  Layers
+  Settings, Save, Building2, Sparkles, X, Briefcase, Globe, Target, Shield, Info,
+  ChevronRight, LogOut, CreditCard, Zap, Activity, CheckCircle2, Layers, Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -27,28 +10,12 @@ import Sidebar from '../components/Sidebar';
 import CompanySwitcher from '../components/CompanySwitcher';
 import { syncSettingsToWebhook } from '../utils/webhookSync';
 import { generateTopicSuggestions } from '../utils/openai';
-import { calculatePricing, type PricingConfig, getTierConfig, SubscriptionTier } from '../utils/pricing';
+import { calculatePricing, type PricingConfig, getTierConfig, SubscriptionTier, formatCurrency } from '../utils/pricing';
 
 type Topic = {
   id: string;
   topic_name: string;
   is_custom: boolean;
-};
-
-type Source = {
-  id: string;
-  name: string;
-  url: string;
-  description: string;
-  is_core_source?: boolean;
-};
-
-type Subscription = {
-  id: string;
-  tier: 'basic' | 'premium' | 'enterprise';
-  status: string;
-  monthly_price: number;
-  included_credits: number;
 };
 
 export default function SettingsPage() {
@@ -73,7 +40,6 @@ export default function SettingsPage() {
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly'>('biweekly');
   const [resultsPerScan, setResultsPerScan] = useState(10);
   const [analysisDepth, setAnalysisDepth] = useState<'standard' | 'deep'>('standard');
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   useEffect(() => {
     if (profile?.id && !authLoading) {
@@ -85,12 +51,8 @@ export default function SettingsPage() {
     if (!profile?.id || !currentCompany) return;
 
     try {
-      const [topicsRes, subscriptionRes] = await Promise.all([
-        supabase.from('topics').select('*').eq('company_id', currentCompany.id),
-        supabase.from('watchdog_subscribers').select('*').eq('profile_id', profile.id).maybeSingle(),
-      ]);
+      const { data: topicsRes } = await supabase.from('topics').select('*').eq('company_id', currentCompany.id);
 
-      // Map current company data
       setCompanyName(currentCompany.name || '');
       setIndustry(currentCompany.industry || '');
       setBusinessDescription(currentCompany.description || '');
@@ -100,57 +62,39 @@ export default function SettingsPage() {
       setResultsPerScan(currentCompany.results_per_scan || 10);
       setAnalysisDepth(currentCompany.analysis_depth || 'standard');
       
-      // Load frequency from company instead of subscription table
       if (currentCompany.subscription_frequency) {
         setFrequency(currentCompany.subscription_frequency);
       }
 
-      setTopics(topicsRes.data || []);
-
-      if (subscriptionRes.data) {
-        setSubscription(subscriptionRes.data);
-      }
+      setTopics(topicsRes || []);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
   };
 
-  const getCurrentPricing = () => {
-    const config: PricingConfig = {
-      tier: profile?.subscription_tier || 'basic',
-      contentTypeCount: 5, // Default/Placeholder as we removed sources tab
-      deliveryMethod: 'dashboard',
-      deepAnalysis: analysisDepth === 'deep',
+  const handlePurchaseCredits = (credits: number) => {
+    const links = {
+      100: 'https://buy.stripe.com/7sY4gz9OA673d9xgztfMA00',
+      300: 'https://buy.stripe.com/00w9AT5ykbrnc5tdnhfMA01',
+      1000: 'https://buy.stripe.com/4gMfZh6Co52Z3yX1EzfMA02',
     };
-    return calculatePricing(config);
-  };
-
-  // Update resultsPerScan when tier changes to match plan defaults
-  useEffect(() => {
-    if (profile?.subscription_tier) {
-      const config = getTierConfig(profile.subscription_tier as SubscriptionTier);
-      if (!config.resultsChangeable) {
-        setResultsPerScan(config.maxResults);
-      }
+    
+    const url = links[credits as keyof typeof links];
+    if (url && profile?.id) {
+      const stripeUrl = new URL(url);
+      stripeUrl.searchParams.set('client_reference_id', profile.id);
+      if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
+      window.location.href = stripeUrl.toString();
     }
-  }, [profile?.subscription_tier]);
+  };
 
   const handleGetTopicSuggestions = async () => {
     setAiLoading(true);
     try {
-      let suggestions = await generateTopicSuggestions(businessDescription, industry, []);
-      
-      // Fallback if AI/Webhook returns nothing
-      if (!suggestions || suggestions.length === 0) {
-        const fallbackTopics = await import('../utils/openai').then(m => m.getTopicSuggestions(businessDescription, industry));
-        setTopicSuggestions(fallbackTopics);
-      } else {
-        setTopicSuggestions(suggestions.map(s => s.topic));
-      }
+      const suggestions = await generateTopicSuggestions(businessDescription, industry, []);
+      setTopicSuggestions(suggestions?.map(s => s.topic) || ['Market Trends', 'Competitor Activity', 'Regulatory Updates']);
     } catch (error) {
-      console.error('Error getting topic suggestions:', error);
-      // Even deeper fallback
-      setTopicSuggestions(['Industry News', 'Regulatory Changes', 'Market Trends', 'Competitor Activity']);
+      setTopicSuggestions(['Industry News', 'Regulatory Changes', 'Market Trends']);
     } finally {
       setAiLoading(false);
     }
@@ -158,112 +102,63 @@ export default function SettingsPage() {
 
   const handleAddTopic = async () => {
     if (!newTopic.trim() || !currentCompany?.id) return;
-
     try {
-      const { data } = await supabase
-        .from('topics')
-        .insert({ 
-          company_id: currentCompany.id, 
-          profile_id: profile?.id, // Keep for backward compat
-          topic_name: newTopic.trim(), 
-          is_custom: true 
-        })
-        .select()
-        .single();
-
+      const { data } = await supabase.from('topics').insert({ 
+        company_id: currentCompany.id, 
+        profile_id: profile?.id,
+        topic_name: newTopic.trim(), 
+        is_custom: true 
+      }).select().single();
       if (data) {
         setTopics([...topics, data]);
         setNewTopic('');
       }
-    } catch (error) {
-      console.error('Error adding topic:', error);
-    }
+    } catch (error) {}
   };
 
   const handleRemoveTopic = async (id: string) => {
     try {
       await supabase.from('topics').delete().eq('id', id);
       setTopics(topics.filter((t: Topic) => t.id !== id));
-    } catch (error) {
-      console.error('Error removing topic:', error);
-    }
+    } catch (error) {}
   };
 
   const handleSave = async () => {
     if (!profile?.id || !user || !currentCompany) return;
-
     setSaving(true);
     try {
-      // 1. Update Company (Source of truth for profile and frequency)
-      const { error: companyError } = await supabase
-        .from('companies')
-        .update({
-          name: companyName,
-          industry,
-          description: businessDescription,
-          location_country: locationCountry,
-          location_province: locationProvince,
-          location_city: locationCity,
-          analysis_depth: analysisDepth,
-          results_per_scan: resultsPerScan,
-          subscription_frequency: frequency, // Critical: frequency lives here now
-        })
-        .eq('id', currentCompany.id);
+      await supabase.from('companies').update({
+        name: companyName,
+        industry,
+        description: businessDescription,
+        location_country: locationCountry,
+        location_province: locationProvince,
+        location_city: locationCity,
+        analysis_depth: analysisDepth,
+        results_per_scan: resultsPerScan,
+        subscription_frequency: frequency,
+      }).eq('id', currentCompany.id);
 
-      if (companyError) throw companyError;
-
-      // 2. Update Profile Name for consistency
-      await supabase
-        .from('profiles')
-        .update({ company_name: companyName })
-        .eq('id', profile.id);
-
-      // 3. Update watchdog_subscribers (Source of truth for status/tier)
-      // 3. Update watchdog_subscribers (Silent upsert as DB constraint manages conflicts)
-      const tierConfig = getTierConfig(profile?.subscription_tier as SubscriptionTier || 'basic');
-      await supabase
-        .from('watchdog_subscribers')
-        .upsert({
-          profile_id: profile.id,
-          company_id: currentCompany.id,
-          tier: profile?.subscription_tier || 'basic',
-          status: 'active',
-          monthly_price: tierConfig.monthlyPrice,
-          included_credits: tierConfig.monthlyCredits,
-          updated_at: new Date().toISOString(),
-        }, { 
-          onConflict: 'profile_id' 
-        });
-
-      // 4. Webhook Sync (Non-blocking)
-      try {
-        await syncSettingsToWebhook({
-          userId: user.id,
-          email: user.email || '',
-          companyId: currentCompany.id,
-          companyName: companyName,
-          industry,
-          description: businessDescription,
-          monitoringGoals: [],
-          topics: topics.map((t: Topic) => t.topic_name),
-          sources: [], 
-          location: {
-            country: locationCountry,
-            province: locationProvince,
-            city: locationCity,
-            city: locationCity,
-          },
-          context: [],
-        });
-      } catch (webhookError) {
-        console.warn('Webhook sync failed (non-fatal):', webhookError);
-      }
+      await supabase.from('profiles').update({ company_name: companyName }).eq('id', profile.id);
+      
+      await syncSettingsToWebhook({
+        userId: user.id,
+        email: user.email || '',
+        companyId: currentCompany.id,
+        companyName: companyName,
+        industry,
+        description: businessDescription,
+        monitoringGoals: [],
+        topics: topics.map((t: Topic) => t.topic_name),
+        sources: [], 
+        location: { country: locationCountry, province: locationProvince, city: locationCity },
+        context: [],
+      });
 
       await refreshProfile();
-      alert('Settings saved successfully!');
+      alert('Settings saved!');
     } catch (error) {
-      console.error('Error saving settings:', error);
-      alert('Failed to save settings. Please try again or contact support.');
+      alert('Failed to save settings.');
     } finally {
       setSaving(false);
     }
@@ -271,354 +166,239 @@ export default function SettingsPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Activity className="w-8 h-8 animate-spin text-indigo-500" />
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
       </div>
     );
   }
 
-  const pricing = getCurrentPricing();
+  const pricing = calculatePricing({
+    tier: (profile?.subscription_tier as SubscriptionTier) || 'basic',
+    contentTypeCount: 5,
+    deliveryMethod: 'dashboard',
+    deepAnalysis: analysisDepth === 'deep'
+  });
 
   return (
-    <div className="flex bg-slate-50 min-h-screen text-slate-900">
+    <div className="flex h-screen bg-[#020617] text-slate-100 overflow-hidden">
       <Sidebar />
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header Section */}
-        <header className="px-8 py-6 bg-white/80 backdrop-blur-md border-b border-slate-200 z-20 flex items-center justify-between text-left shrink-0">
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="px-8 py-6 bg-[#020617]/80 backdrop-blur-md border-b border-slate-800/50 flex items-center justify-between shrink-0">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-              <Settings className="w-6 h-6 text-indigo-600" />
+            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+              <Settings className="w-6 h-6 text-blue-500" />
               Settings
             </h1>
-            <p className="text-sm text-slate-500 font-medium mt-1">
-              Your company profile and monitoring settings
-            </p>
+            <p className="text-sm text-slate-400 mt-1 uppercase tracking-widest font-bold">Configure your intelligence parameters</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-xl border border-indigo-100">
-              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Settings Saved</span>
-            </div>
-            
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-black shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {saving ? <Activity className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
-          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? 'Saving...' : 'Save Configuration'}
+          </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 custom-scrollbar">
-          <div className="max-w-5xl mx-auto space-y-10 pb-20">
+        <div className="flex-1 overflow-y-auto px-10 py-8 scrollbar-hide">
+          <div className="max-w-5xl mx-auto space-y-12 pb-20 text-left">
             
-            {/* Active Entities Grid */}
-            <section className="text-left">
+            {/* Company Selection */}
+            <section>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-indigo-600" />
-                    Your Companies
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-blue-500" />
+                    Global Profile
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Manage your registered companies</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Manage entity monitoring context</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <CompanySwitcher />
                   <button
                     onClick={() => navigate('/onboarding')}
-                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"
-                    title="Add New Company"
+                    className="p-2.5 bg-slate-900/40 border border-slate-800/50 rounded-xl hover:bg-slate-800/50 text-slate-400 transition-all shadow-sm"
+                    title="Add New Entity"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 {companies.map((company: any) => (
                   <button
                     key={company.id}
                     onClick={() => company.id !== currentCompany?.id && switchCompany(company.id)}
-                    className={`group p-5 rounded-3xl border-2 transition-all text-left relative overflow-hidden ${
+                    className={`group p-5 rounded-2xl border transition-all text-left relative overflow-hidden ${
                       company.id === currentCompany?.id
-                        ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100'
-                        : 'border-slate-100 bg-white hover:border-slate-200'
+                        ? 'border-blue-500/50 bg-blue-500/5 shadow-lg shadow-blue-900/10'
+                        : 'border-slate-800/50 bg-slate-900/20 hover:border-slate-700'
                     }`}
                   >
-                    {company.id === currentCompany?.id && (
-                      <div className="absolute top-0 right-0 p-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-600"></div>
-                      </div>
-                    )}
-                    <h3 className="font-black text-slate-900 text-sm mb-1">{company.name}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{company.industry}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase">Monitoring Active</span>
-                    </div>
+                    <h3 className="font-black text-sm mb-1">{company.name}</h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{company.industry}</p>
+                    {company.id === currentCompany?.id && <div className="absolute top-0 right-0 p-3"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div></div>}
                   </button>
                 ))}
               </div>
 
-              {/* Company Profile Component Edit */}
-              <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
-                <div className="mb-6 pb-6 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-500" />
-                    Company Profile: {currentCompany?.name}
-                  </h3>
-                </div>
-
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-3xl p-8 backdrop-blur-sm">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Company Name</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">Entity Name</label>
                       <input
-                        type="text"
-                        value={companyName}
-                      onChange={(e: React.ChangeEvent<any>) => setCompanyName(e.target.value)}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 font-bold focus:border-indigo-500 transition-all outline-none"
+                        value={companyName} onChange={e => setCompanyName(e.target.value)}
+                        className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-5 py-3 font-bold focus:border-blue-500 outline-none transition-all"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Industry</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">Sector / Industry</label>
                       <input
-                        type="text"
-                        value={industry}
-                      onChange={(e: React.ChangeEvent<any>) => setIndustry(e.target.value)}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 font-bold focus:border-indigo-500 transition-all outline-none"
+                        value={industry} onChange={e => setIndustry(e.target.value)}
+                        className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-5 py-3 font-bold focus:border-blue-500 outline-none transition-all"
                       />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 block">Operation Hub</label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <input value={locationCountry} onChange={e => setLocationCountry(e.target.value)} placeholder="Country" className="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-500 outline-none" />
+                        <input value={locationProvince} onChange={e => setLocationProvince(e.target.value)} placeholder="Prov/State" className="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-500 outline-none" />
+                        <input value={locationCity} onChange={e => setLocationCity(e.target.value)} placeholder="City" className="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-500 outline-none" />
+                      </div>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">About Your Company</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">Strategic Context (Bio)</label>
                     <textarea
-                      value={businessDescription}
-                      onChange={(e: React.ChangeEvent<any>) => setBusinessDescription(e.target.value)}
-                      rows={5}
-                      className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 font-medium text-slate-600 focus:border-indigo-500 transition-all outline-none resize-none leading-relaxed text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-slate-100">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 block">Geographic Focus</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input
-                      type="text"
-                      value={locationCountry}
-                      onChange={(e) => setLocationCountry(e.target.value)}
-                      className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-xs font-bold focus:border-indigo-500 transition-all outline-none"
-                      placeholder="Country"
-                    />
-                    <input
-                      type="text"
-                      value={locationProvince}
-                      onChange={(e) => setLocationProvince(e.target.value)}
-                      className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-xs font-bold focus:border-indigo-500 transition-all outline-none"
-                      placeholder="Province"
-                    />
-                    <input
-                      type="text"
-                      value={locationCity}
-                      onChange={(e) => setLocationCity(e.target.value)}
-                      className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-xs font-bold focus:border-indigo-500 transition-all outline-none"
-                      placeholder="City"
+                      value={businessDescription} onChange={e => setBusinessDescription(e.target.value)} rows={7}
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-5 py-3 font-bold focus:border-blue-500 outline-none transition-all resize-none text-sm text-slate-300 leading-relaxed"
                     />
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Strategic Intelligence Channels */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-10 text-left">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+              {/* Intelligence Topics */}
               <div className="lg:col-span-2 space-y-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-indigo-600" />
-                    Topics to Monitor
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-blue-500" />
+                    Intelligence Topics
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Select the topics you want us to monitor</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Refine the scope of your monitoring pipeline</p>
                 </div>
 
-                <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-8">
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newTopic}
-                        onChange={(e) => setNewTopic(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAddTopic()}
-                        className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold focus:border-indigo-500 transition-all outline-none text-sm"
-                        placeholder="e.g. AI in Healthcare..."
-                      />
-                      <button
-                        onClick={handleAddTopic}
-                        className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-slate-800 transition-all"
-                      >
-                        Add
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {topics.map((topic) => (
-                        <div
-                          key={topic.id}
-                          className="flex items-center gap-3 pl-4 pr-2 py-2 bg-slate-50 border border-slate-100 rounded-xl hover:border-indigo-200 transition-all"
-                        >
-                          <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{topic.topic_name}</span>
-                          <button
-                            onClick={() => handleRemoveTopic(topic.id)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 transition-all"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                <div className="bg-slate-900/40 border border-slate-800/50 rounded-3xl p-8">
+                  <div className="flex gap-2 mb-6">
+                    <input
+                      placeholder="Add custom topic (e.g. Rare Earth Metals)"
+                      className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl px-5 py-3 font-bold focus:border-blue-500 outline-none transition-all text-sm"
+                      value={newTopic} onChange={e => setNewTopic(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && handleAddTopic()}
+                    />
+                    <button onClick={handleAddTopic} className="bg-slate-800 hover:bg-slate-700 px-6 rounded-xl font-black text-xs uppercase transition-all">Add</button>
                   </div>
 
-                  {/* AI Recommendations */}
-                  <div className="pt-8 border-t border-slate-50">
-                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">AI Suggested Topics</span>
-                        <button 
-                          onClick={handleGetTopicSuggestions}
-                          disabled={aiLoading}
-                          className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 hover:underline disabled:opacity-50"
-                        >
-                          {aiLoading ? 'Analyzing...' : <><Sparkles className="w-3 h-3" /> Refresh Topics</>}
-                        </button>
-                     </div>
-                     <div className="flex flex-wrap gap-2">
-                        {topicSuggestions.map((suggestion: string) => (
-                          <button
-                            key={suggestion}
-                            onClick={() => setNewTopic(suggestion)}
-                            className="px-3 py-1.5 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase transition-all"
-                          >
-                            + {suggestion}
-                          </button>
-                        ))}
-                     </div>
+                  <div className="flex flex-wrap gap-2 mb-8">
+                    {topics.map(topic => (
+                      <div key={topic.id} className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full group hover:border-blue-500/50 transition-all">
+                        <span className="text-[10px] font-black uppercase tracking-tight text-blue-400">{topic.topic_name}</span>
+                        <button onClick={() => handleRemoveTopic(topic.id)} className="text-blue-500/50 hover:text-rose-500 transition-all"><X className="w-3 h-3" /></button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-800/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-black uppercase text-slate-500">AI Augmented Suggestions</span>
+                      <button onClick={handleGetTopicSuggestions} disabled={aiLoading} className="text-[10px] font-black text-blue-500 hover:underline flex items-center gap-1">
+                        {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Refresh
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {topicSuggestions.map(s => (
+                        <button key={s} onClick={() => setNewTopic(s)} className="px-3 py-1 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all">+ {s}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Resource Allocation Sidepanel */}
+              {/* Resource Management */}
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-indigo-600 fill-indigo-600" />
-                    Your Plan
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-blue-500 fill-blue-500" />
+                    Pulse & Credits
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Review your current plan and monitoring frequency</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Manage scan frequency and purchasing</p>
                 </div>
 
-                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                   <div className="relative z-10 text-left">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full mb-6">
-                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-200">{profile?.subscription_tier === 'premium' ? 'Premium Plan' : profile?.subscription_tier === 'enterprise' ? 'Enterprise Plan' : 'Basic Plan'}</p>
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-[10px] font-black uppercase text-slate-500">Pulse Interval</span>
+                      <select
+                        value={frequency} onChange={e => setFrequency(e.target.value as any)}
+                        className="bg-slate-800 border-none rounded-lg px-2 py-1 text-[10px] font-black text-blue-400 outline-none"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Bi-Weekly</option>
+                      </select>
                     </div>
 
-                    <div className="flex items-baseline gap-1 mb-10">
-                      <span className="text-5xl font-black">${pricing.monthlyTotal}</span>
-                      <span className="text-slate-400 font-bold text-base">/mo CAD</span>
+                    <div className="bg-blue-600/5 border border-blue-500/20 rounded-2xl p-4 mb-6">
+                      <p className="text-[10px] font-black uppercase text-blue-400 mb-1">Vault Status</p>
+                      <p className="text-2xl font-black text-white">{profile?.manual_scan_credits || 0} <span className="text-xs text-slate-500 font-bold uppercase">Credits</span></p>
                     </div>
 
-                    <div className="space-y-5 mb-10 border-b border-white/5 pb-10">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Scan Frequency</span>
-                        <select
-                          value={frequency}
-                          onChange={(e) => setFrequency(e.target.value as any)}
-                          className="bg-slate-800 border-none rounded-xl px-3 py-1.5 text-xs font-black text-indigo-300 outline-none cursor-pointer"
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black uppercase text-slate-500 mb-2">Buy Manual Scan Credits</h4>
+                      {[
+                        { amt: 100, price: '$25', desc: 'Starter Pack', link: 100 },
+                        { amt: 300, price: '$65', desc: 'Professional', link: 300 },
+                        { amt: 1000, price: '$195', desc: 'Enterprise', link: 1000 },
+                      ].map(pkg => (
+                        <button
+                          key={pkg.amt}
+                          onClick={() => handlePurchaseCredits(pkg.link)}
+                          className="w-full flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl hover:bg-slate-800 transition-all group"
                         >
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
-                          <option value="biweekly">Bi-Weekly</option>
-                        </select>
-                      </div>
-                      <div className="flex justify-between items-center group relative">
-                         <div className="flex flex-col">
-                            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Results per Scan</span>
-                            <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">
-                               {getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable ? 'Customizable' : 'Fixed by plan'}
-                            </span>
-                         </div>
-                         <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={resultsPerScan}
-                              onChange={(e) => setResultsPerScan(parseInt(e.target.value))}
-                              disabled={!getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable}
-                              max={getTierConfig(profile?.subscription_tier as SubscriptionTier).maxResults}
-                              min={1}
-                              className="w-12 bg-slate-800 border-none rounded-xl px-2 py-1.5 text-xs font-black text-indigo-300 text-center outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                            />
-                            {!getTierConfig(profile?.subscription_tier as SubscriptionTier).resultsChangeable && (
-                              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 px-3 py-2 rounded-xl text-[9px] font-black text-white uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50">
-                                Upgrade to Enterprise to customize
-                              </div>
-                            )}
-                         </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">AI Analysis Level</span>
-                        <div className="flex bg-slate-800 p-1 rounded-xl">
-                          <button
-                            onClick={() => setAnalysisDepth('standard')}
-                            className={`px-3 py-1 rounded-lg font-black uppercase text-[9px] transition-all ${analysisDepth === 'standard' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                          >Std</button>
-                          <button
-                            onClick={() => setAnalysisDepth('deep')}
-                            className={`px-3 py-1 rounded-lg font-black uppercase text-[9px] transition-all ${analysisDepth === 'deep' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                          >Manual</button>
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-white/5 space-y-3">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>{resultsPerScan} AI Scans per cycle</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>{analysisDepth === 'deep' ? 'Manual Scan intelligence included' : 'Standard AI Analysis'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>Dashboard & Alerts active</span>
-                        </div>
-                      </div>
+                          <div className="text-left">
+                            <p className="text-xs font-black text-white">{pkg.amt} <span className="text-[9px] text-slate-500">Credits</span></p>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase">{pkg.desc}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-blue-400">{pkg.price}</span>
+                            <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-blue-500 transition-colors" />
+                          </div>
+                        </button>
+                      ))}
                     </div>
 
                     <button
                       onClick={handleSave}
-                      disabled={saving}
-                      className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black text-sm hover:bg-slate-100 transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                      className="w-full mt-8 bg-blue-600 py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-900/20 active:scale-95 transition-all"
                     >
-                      {saving ? 'UPDATING...' : 'SAVE SETTINGS'}
+                      Update Configuration
                     </button>
                   </div>
                 </div>
 
-                <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100 text-left">
-                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                      <Info className="w-3 h-3" /> Note
-                    </h4>
-                    <p className="text-[11px] text-indigo-700/80 font-bold leading-relaxed">
-                      Changes trigger a background re-sync. Your monitoring pipeline will update with these new settings on the next scan cycle.
-                    </p>
+                <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                  <p className="text-[10px] font-bold text-blue-400/80 leading-relaxed italic">
+                    "Intelligence settings apply globally. Changes will be reflected in your next automated pulse."
+                  </p>
                 </div>
               </div>
-            </section>
+            </div>
           </div>
         </div>
       </main>

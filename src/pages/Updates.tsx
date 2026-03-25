@@ -24,8 +24,8 @@ interface UnifiedArticle {
   type: string;
   isSaved: boolean;
   isRead: boolean;
+  isFavourite: boolean;
   batchId?: string;
-  scanId?: string;
 }
 
 export default function Updates() {
@@ -33,13 +33,12 @@ export default function Updates() {
   const navigate = useNavigate();
   
   const [articles, setArticles] = useState<UnifiedArticle[]>([]);
-  const [scanSummaries, setScanSummaries] = useState<ScanSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'automated' | 'manual'>('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'newest' | 'oldest'>('relevance');
   const [showToast, setShowToast] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<UnifiedArticle | null>(null);
   const [stats, setStats] = useState({ total: 0, new: 0, sources: 0 });
+  const [countdown, setCountdown] = useState<string>('');
 
   useEffect(() => {
     if (profile?.id && !authLoading) {
@@ -47,15 +46,40 @@ export default function Updates() {
     }
   }, [profile?.id, currentCompany?.id, authLoading]);
 
+  // Countdown Logic
+  useEffect(() => {
+    if (!currentCompany?.next_scan_due_date) return;
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const target = new Date(currentCompany.next_scan_due_date).getTime();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        setCountdown('Scan Imminent');
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentCompany?.next_scan_due_date]);
+
   const loadIntelligence = async () => {
     if (!profile?.id) return;
     setLoading(true);
 
     try {
-      // 1. Fetch Scheduled Updates (Automated)
+      // 1. Fetch Scheduled Updates (Automated) - ONLY UNREAD
       let updatesQuery = supabase
         .from('updates')
         .select('*')
+        .eq('is_read', false)
         .order('published_at', { ascending: false });
       
       if (currentCompany?.id) {
@@ -66,77 +90,32 @@ export default function Updates() {
       
       const { data: updates, error: updatesError } = await updatesQuery;
 
-      // 2. Fetch Manual Scans
-      let scansQuery = supabase
-        .from('scan_summaries')
-        .select('*')
-        .order('scan_date', { ascending: false });
-      
-      if (currentCompany?.id) {
-        scansQuery = scansQuery.eq('company_id', currentCompany.id);
-      } else {
-        scansQuery = scansQuery.eq('profile_id', profile.id);
-      }
-      
-      const { data: scans, error: scansError } = await scansQuery;
-
-      // 3. Fetch Sources Count
+      // 2. Fetch Sources Count
       const { count: sourcesCount } = await supabase
         .from('sources')
         .select('*', { count: 'exact', head: true })
         .eq('profile_id', profile.id);
 
-      if (updatesError || scansError) throw updatesError || scansError;
+      if (updatesError) throw updatesError;
 
-      // 4. Transform and Merge
-      const unified: UnifiedArticle[] = [];
-
-      updates?.forEach(u => {
-        unified.push({
-          id: u.id,
-          title: u.title,
-          summary: u.summary,
-          url: u.url,
-          source: u.source_name || 'Web',
-          publishedAt: u.published_at || u.created_at,
-          relevanceScore: u.relevance_score || 0,
-          relevanceReasoning: u.relevance_reasoning || '',
-          type: u.content_type || 'news',
-          isSaved: u.is_saved || false,
-          isRead: u.is_read || false,
-          batchId: u.delivery_batch
-        });
-      });
-
-      scans?.forEach(scan => {
-        scan.citations?.forEach((cit: any, idx: number) => {
-          unified.push({
-            id: `${scan.id}-${idx}`,
-            title: cit.title,
-            summary: cit.summary || scan.overview || '',
-            url: cit.url,
-            source: cit.source_name || (cit.url ? new URL(cit.url).hostname.replace('www.', '') : 'Research'),
-            publishedAt: scan.scan_date,
-            relevanceScore: cit.relevance_score || scan.relevance_score || 70,
-            relevanceReasoning: cit.relevance_reasoning || scan.relevance_reasoning || '',
-            type: 'report',
-            isSaved: false,
-            isRead: scan.is_read || false,
-            scanId: scan.id
-          });
-        });
-      });
-
-      // Deduplicate
-      const seen = new Set();
-      const finalArticles = unified.filter(a => {
-        if (seen.has(a.url)) return false;
-        seen.add(a.url);
-        return true;
-      });
+      // 3. Transform
+      const finalArticles = (updates || []).map(u => ({
+        id: u.id,
+        title: u.title,
+        summary: u.summary,
+        url: u.url,
+        source: u.source_name || 'Web',
+        publishedAt: u.published_at || u.created_at,
+        relevanceScore: u.relevance_score || 0,
+        relevanceReasoning: u.relevance_reasoning || '',
+        type: u.content_type || 'news',
+        isSaved: u.is_saved || false,
+        isRead: u.is_read || false,
+        isFavourite: u.is_favourite || false,
+        batchId: u.delivery_batch
+      }));
 
       setArticles(finalArticles);
-      setScanSummaries(scans || []);
       setStats({
         total: finalArticles.length,
         new: finalArticles.filter(a => !a.isRead).length,
@@ -151,16 +130,8 @@ export default function Updates() {
   };
 
   const groupedArticles = useMemo(() => {
-    // Filter
-    let filtered = articles.filter(article => {
-      if (filter === 'all') return true;
-      if (filter === 'automated') return !article.scanId;
-      if (filter === 'manual') return !!article.scanId;
-      return true;
-    });
-
     // Sort
-    const sorted = [...filtered].sort((a, b) => {
+    const sorted = [...articles].sort((a, b) => {
       if (sortBy === 'relevance') return b.relevanceScore - a.relevanceScore;
       if (sortBy === 'newest') return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
       return new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
@@ -183,38 +154,30 @@ export default function Updates() {
     });
     
     return groups;
-  }, [articles, filter, sortBy]);
+  }, [articles, sortBy]);
 
-  const handleSaveArticle = async (id: string, currentlySaved: boolean) => {
+  const handleFavouriteArticle = async (id: string, currentlyFavourite: boolean) => {
     try {
-      if (id.includes('-')) {
-        setArticles(prev => prev.map(a => a.id === id ? { ...a, isSaved: !currentlySaved } : a));
-        return;
-      }
       const { error } = await supabase
         .from('updates')
-        .update({ is_saved: !currentlySaved })
+        .update({ is_favourite: !currentlyFavourite })
         .eq('id', id);
       if (error) throw error;
-      setArticles(prev => prev.map(a => a.id === id ? { ...a, isSaved: !currentlySaved } : a));
-      if (!currentlySaved) setShowToast(true);
+      setArticles(prev => prev.map(a => a.id === id ? { ...a, isFavourite: !currentlyFavourite } : a));
     } catch (err) {
-      console.error('Error saving article:', err);
+      console.error('Error favouriting article:', err);
     }
   };
 
   const handleArchiveArticle = async (id: string, currentlyRead: boolean) => {
     try {
-      if (id.includes('-')) {
-        setArticles(prev => prev.map(a => a.id === id ? { ...a, isRead: !currentlyRead } : a));
-        return;
-      }
       const { error } = await supabase
         .from('updates')
         .update({ is_read: !currentlyRead })
         .eq('id', id);
       if (error) throw error;
       setArticles(prev => prev.map(a => a.id === id ? { ...a, isRead: !currentlyRead } : a));
+      if (!currentlyRead) setShowToast(true);
     } catch (err) {
       console.error('Error archiving article:', err);
     }
@@ -239,7 +202,7 @@ export default function Updates() {
         <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />
 
-        <header className="h-20 border-b border-slate-800/50 flex items-center justify-between px-8 bg-slate-900/50 backdrop-blur-md z-10">
+        <header className="h-24 border-b border-slate-800/50 flex items-center justify-between px-8 bg-slate-900/50 backdrop-blur-md z-10 transition-all duration-300">
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20 shadow-lg shadow-blue-500/5">
               <Newspaper className="w-6 h-6 text-blue-400" />
@@ -250,23 +213,15 @@ export default function Updates() {
             </div>
           </div>
           
-          <div className="flex items-center gap-6">
-            <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-800 shadow-inner">
-              {(['all', 'automated', 'manual'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setFilter(t)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 uppercase tracking-widest ${
-                    filter === t 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' 
-                      : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  {t === 'all' ? 'All Signals' : t === 'automated' ? 'Automated' : 'Deep Scans'}
-                </button>
-              ))}
+          <div className="flex items-center gap-8">
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Next Automated Scan</span>
+              <div className="flex items-center gap-3 px-4 py-2 bg-slate-950/80 border border-slate-800/50 rounded-xl shadow-inner group">
+                <Clock className="w-3.5 h-3.5 text-blue-500 group-hover:animate-pulse" />
+                <span className="text-sm font-black text-blue-400 font-mono tracking-tight">{countdown || '--h --m --s'}</span>
+              </div>
             </div>
-            <div className="h-6 w-px bg-slate-800" />
+            <div className="h-10 w-px bg-slate-800/50" />
             <CompanySwitcher />
           </div>
         </header>
@@ -274,57 +229,10 @@ export default function Updates() {
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <div className="max-w-6xl mx-auto space-y-16 pb-20">
             
-            {filter !== 'automated' && scanSummaries.length > 0 && (
-              <section className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-amber-400" />
-                  </div>
-                  <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Strategic Research Analysis</h2>
-                  <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent ml-4" />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {scanSummaries.map((summary) => (
-                    <div key={summary.id} className="glass-card group hover:scale-[1.02] transition-all duration-500 border border-slate-800/50 hover:border-blue-500/30 overflow-hidden flex flex-col h-full bg-slate-900/40 backdrop-blur-sm shadow-xl hover:shadow-blue-500/5">
-                      <div className="p-6 flex-1 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[9px] font-black uppercase tracking-tighter rounded border border-blue-500/20">
-                            {summary.content_type || 'Deep Research'}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                            {new Date(summary.scan_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-                        <h3 className="font-bold text-slate-100 text-lg leading-snug group-hover:text-blue-400 transition-colors line-clamp-2">
-                          {summary.summary_text.split('\n')[0].replace(/^#+\s*/, '')}
-                        </h3>
-                        <p className="text-sm text-slate-400 line-clamp-3 leading-relaxed font-medium">
-                          {summary.overview || summary.summary_text.substring(0, 150) + '...'}
-                        </p>
-                      </div>
-                      <div className="px-6 py-4 bg-slate-950/40 border-t border-slate-800/50 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                          <BookOpen className="w-3.5 h-3.5 text-blue-500" />
-                          <span>{summary.article_count} Evidence Points</span>
-                        </div>
-                        <button 
-                          onClick={() => navigate(`/research?id=${summary.id}`)}
-                          className="text-[10px] font-black text-blue-400 hover:text-white flex items-center gap-2 transition-all uppercase tracking-[0.1em] group/btn"
-                        >
-                          Synthesize <ChevronRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {filter !== 'manual' && Array.from(groupedArticles.entries()).map(([interval, intervalArticles]) => (
+            {Array.from(groupedArticles.entries()).map(([interval, intervalArticles]) => (
               <section key={interval} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="flex items-center gap-3 mb-8">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shadow-lg shadow-blue-500/5">
                     <Clock className="w-4 h-4 text-blue-400" />
                   </div>
                   <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">{interval}</h2>
@@ -333,7 +241,7 @@ export default function Updates() {
 
                 <div className="space-y-6">
                   {intervalArticles.map((article) => (
-                    <div key={article.id} className="glass-card group hover:bg-slate-900/60 transition-all duration-500 border border-slate-800/50 hover:border-slate-700/50 flex flex-col sm:flex-row gap-8 p-8 items-center bg-slate-900/30 shadow-lg">
+                    <div key={article.id} className="glass-card group hover:bg-slate-900/60 transition-all duration-500 border border-slate-800/50 hover:border-slate-700/50 flex flex-col sm:flex-row gap-8 p-8 items-center bg-slate-900/30 shadow-lg relative overflow-hidden">
                       <div className="w-48 h-32 rounded-2xl bg-slate-950 border border-slate-800 flex-shrink-0 flex items-center justify-center relative overflow-hidden group-hover:border-blue-500/30 transition-colors">
                         <Globe className="w-8 h-8 text-slate-800 group-hover:text-blue-500/20 transition-all duration-500" />
                         <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-600/0 via-blue-600/20 to-blue-600/0 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
@@ -366,28 +274,26 @@ export default function Updates() {
                         <div className="flex items-center justify-between pt-2">
                           <div className="flex items-center gap-6">
                             <button 
-                              onClick={() => handleSaveArticle(article.id, article.isSaved)} 
+                              onClick={() => handleFavouriteArticle(article.id, article.isFavourite)} 
                               className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${
-                                article.isSaved ? 'text-amber-400 scale-105' : 'text-slate-500 hover:text-amber-400'
+                                article.isFavourite ? 'text-red-500 scale-105' : 'text-slate-500 hover:text-red-400'
                               }`}
                             >
-                              <Heart className={`w-4 h-4 ${article.isSaved ? 'fill-amber-400' : ''}`} />
-                              {article.isSaved ? 'Favourited' : 'Favourite'}
+                              <Heart className={`w-4 h-4 ${article.isFavourite ? 'fill-red-500' : ''}`} />
+                              {article.isFavourite ? 'Favourited' : 'Favourite'}
                             </button>
                             <button 
                               onClick={() => handleArchiveArticle(article.id, article.isRead)} 
-                              className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
-                                article.isRead ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400'
-                              }`}
+                              className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors text-slate-500 hover:text-blue-400"
                             >
                               <Archive className="w-4 h-4" />
-                              {article.isRead ? 'Restore' : 'Archive'}
+                              Move to Vault
                             </button>
                             <button 
                               onClick={() => setSelectedArticle(article)}
                               className="flex items-center gap-2 text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
                             >
-                              <Info className="w-4 h-4" />
+                              <AlertCircle className="w-4 h-4" />
                               Why This?
                             </button>
                           </div>
@@ -411,7 +317,7 @@ export default function Updates() {
             {Array.from(groupedArticles.entries()).length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center py-32 text-center glass-card border-dashed border-2 border-slate-800/50 bg-slate-900/20 rounded-[40px]">
                 <div className="w-20 h-20 bg-slate-950 border border-slate-800 rounded-3xl flex items-center justify-center mb-8 shadow-2xl">
-                  <AlertCircle className="w-10 h-10 text-slate-700" />
+                  <Globe className="w-10 h-10 text-slate-700 animate-pulse" />
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-3">Feed is silent</h3>
                 <p className="text-slate-500 max-w-sm mx-auto leading-relaxed font-medium">
@@ -439,7 +345,7 @@ export default function Updates() {
         />
       )}
 
-      {showToast && <Toast message="Article updated in your intelligence vault" onClose={() => setShowToast(false)} />}
+      {showToast && <Toast message="Article archived in your intelligence vault" onClose={() => setShowToast(false)} />}
     </div>
   );
 }
