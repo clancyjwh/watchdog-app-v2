@@ -6,11 +6,8 @@ import {
   Activity, ArrowLeft, CreditCard, Download, Check, Zap, AlertCircle, X
 } from 'lucide-react';
 import { calculatePricing, PricingConfig, formatCurrency, getFrequencyLabel, getDeliveryMethodLabel, CREDIT_PACKAGES, TIER_CONFIGS, SubscriptionTier, getTierConfig, calculateScansFromCredits } from '../utils/pricing';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
-import StripeCardInput from '../components/StripeCardInput';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+// Stripe Elements and Card Input removed in favor of direct Payment Links
 
 export default function Billing() {
   const { profile, user, signOut, loading: authLoading } = useAuth();
@@ -56,44 +53,7 @@ export default function Billing() {
     }
   };
 
-  const handleCardSuccess = async (paymentMethodId: string) => {
-    if (!profile?.id || !user?.email) return;
-
-    setProcessingCheckout(true);
-    setPaymentError('');
-
-    try {
-      const { data, error: functionError } = await supabase.functions.invoke('process-payment', {
-        body: {
-          action: 'save_card',
-          payment_method_id: paymentMethodId,
-          profile_id: profile.id,
-          user_email: user.email,
-        },
-      });
-
-      if (functionError) {
-        throw new Error(functionError.message || 'Failed to update card');
-      }
-
-      if (data && data.success) {
-        setShowCardForm(false);
-        await loadData();
-        alert('Card saved successfully!');
-      } else {
-        throw new Error(data?.error || 'Failed to save card');
-      }
-    } catch (error) {
-      console.error('Error saving card:', error);
-      setPaymentError(error.message || 'Failed to save card. Please try again.');
-    } finally {
-      setProcessingCheckout(false);
-    }
-  };
-
-  const handleCardError = (error: string) => {
-    setPaymentError(error);
-  };
+  // handleCardSuccess and legacy process-payment logic removed
 
   const handlePurchaseCredits = (pkg: typeof CREDIT_PACKAGES[0]) => {
     const stripeLinks = {
@@ -103,8 +63,11 @@ export default function Billing() {
     };
 
     const link = stripeLinks[pkg.credits as keyof typeof stripeLinks];
-    if (link) {
-      window.location.href = link;
+    if (link && profile?.id) {
+      const stripeUrl = new URL(link);
+      stripeUrl.searchParams.set('client_reference_id', profile.id);
+      if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
+      window.location.href = stripeUrl.toString();
     }
   };
 
@@ -368,8 +331,16 @@ export default function Billing() {
                   <button
                     onClick={() => {
                       if (!isCurrentTier) {
-                        alert('Visit Settings to update your subscription tier');
-                        navigate('/settings');
+                        const tierConfig = TIER_CONFIGS[tier.tier];
+                        if (tierConfig.paymentLink && profile?.id) {
+                          setProcessingCheckout(true);
+                          const stripeUrl = new URL(tierConfig.paymentLink);
+                          stripeUrl.searchParams.set('client_reference_id', profile.id);
+                          if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
+                          window.location.href = stripeUrl.toString();
+                        } else {
+                          alert('Payment link not configured for this tier.');
+                        }
                       }
                     }}
                     disabled={isCurrentTier || processingCheckout}
@@ -381,7 +352,7 @@ export default function Billing() {
                         : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                     }`}
                   >
-                    {isCurrentTier ? 'Current Plan' : 'Select Plan'}
+                    {isCurrentTier ? 'Current Plan' : processingCheckout ? 'Redirecting...' : 'Upgrade Now'}
                   </button>
                 </div>
               );
@@ -417,52 +388,22 @@ export default function Billing() {
 
               {!profile?.stripe_customer_id && (
                 <div className="mt-8 pt-8 border-t border-gray-200 max-w-md mx-auto">
-                  <p className="text-sm font-semibold text-gray-700 mb-4">Add Payment Method</p>
-
-                  {!showCardForm ? (
-                    <button
-                      onClick={() => setShowCardForm(true)}
-                      className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                    >
-                      Add Card
-                    </button>
-                  ) : (
-                    <div>
-                      {paymentError && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-sm text-red-800">{paymentError}</p>
-                          </div>
-                          <button
-                            onClick={() => setPaymentError('')}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                      )}
-
-                      <Elements stripe={stripePromise}>
-                        <StripeCardInput
-                          onSuccess={handleCardSuccess}
-                          onError={handleCardError}
-                          buttonText="Save Card"
-                          description="Add your card details to manage subscriptions and purchase credits."
-                        />
-                      </Elements>
-
-                      <button
-                        onClick={() => {
-                          setShowCardForm(false);
-                          setPaymentError('');
-                        }}
-                        className="mt-4 text-sm text-gray-600 hover:text-gray-800"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-sm font-semibold text-gray-700 mb-4">Start your subscription</p>
+                  <button
+                    onClick={() => {
+                      const tierConfig = TIER_CONFIGS['basic'];
+                      if (tierConfig.paymentLink && profile?.id) {
+                        setProcessingCheckout(true);
+                        const stripeUrl = new URL(tierConfig.paymentLink);
+                        stripeUrl.searchParams.set('client_reference_id', profile.id);
+                        if (user?.email) stripeUrl.searchParams.set('prefilled_email', user.email);
+                        window.location.href = stripeUrl.toString();
+                      }
+                    }}
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    Choose Plan & Continue
+                  </button>
                 </div>
               )}
             </div>

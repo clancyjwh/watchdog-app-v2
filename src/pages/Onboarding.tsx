@@ -6,13 +6,10 @@ import { getSourceSuggestions } from '../utils/mockAI'; // getTopicSuggestions r
 import { getTopicSuggestionsFromAI, getSourceSuggestionsFromAI, SourceSuggestion } from '../utils/perplexity';
 import { getTopicSuggestions, generateTopicSuggestions, TopicSuggestion } from '../utils/openai'; // getTopicSuggestions and TopicSuggestion added here
 import { generateMockUpdates } from '../utils/mockUpdates';
-import { Activity, Check, ChevronRight, ChevronLeft, Plus, Minus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, BarChart, Megaphone, Building2, Briefcase, AlertCircle, Zap, Info } from 'lucide-react'; // Info added here
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
-import StripeCardInput from '../components/StripeCardInput';
-import { formatCurrency, TIER_CONFIGS, SubscriptionTier, getTierConfig, triggerScannerWebhook, getNextDeliveryDate } from '../utils/pricing';
+import { Activity, Check, ChevronRight, ChevronLeft, Plus, Minus, X, DollarSign, Newspaper, FileText, DollarSign as Grant, Building2, Briefcase, AlertCircle, Zap, Info } from 'lucide-react'; // Info added here
+import { formatCurrency, TIER_CONFIGS, SubscriptionTier, getTierConfig, triggerScannerWebhook } from '../utils/pricing';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+// Stripe Elements and loadStripe removed in favor of direct Payment Links
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -81,20 +78,18 @@ export default function Onboarding() {
   const [customTopic, setCustomTopic] = useState('');
   // activeInfoTopic removed here as it was moved up
 
-  const [suggestedSources, setSuggestedSources] = useState<SourceSuggestion[]>([]);
-  const [selectedSources, setSelectedSources] = useState<SourceSuggestion[]>([]);
-  const [customSource, setCustomSource] = useState({ name: '', url: '', description: '', category: '', rssFeedUrl: '' });
-
+  const [resultsPerScan, setResultsPerScan] = useState(5);
   const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(['news', 'legislation', 'government']);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('premium');
-
   const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly' | 'daily'>('biweekly');
   const [analysisDepth, setAnalysisDepth] = useState<'standard' | 'deep'>('standard');
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [competitorInput, setCompetitorInput] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
-  const [resultsPerScan, setResultsPerScan] = useState(5);
+  const [selectedSources, setSelectedSources] = useState<any[]>([]);
+  const [suggestedSources, setSuggestedSources] = useState<any[]>([]);
+  const [customSource, setCustomSource] = useState({ name: '', url: '', description: '', category: '', rssFeedUrl: '' });
   const [requestingMoreSources, setRequestingMoreSources] = useState(false);
 
   // Sync resultsPerScan with selected tier
@@ -207,6 +202,16 @@ export default function Onboarding() {
     localStorage.removeItem('watchdog_onboarding_state');
   };
 
+  useEffect(() => {
+    // Check if we just returned from a successful Stripe checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true' || urlParams.get('session_id')) {
+      setCurrentStep(8);
+      // Clean up the URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const handleNext = async () => {
     console.log('handleNext called, currentStep:', currentStep);
 
@@ -297,7 +302,7 @@ export default function Onboarding() {
       setCurrentStep(7);
     } else if (currentStep < 8) {
       console.log('Advancing step from', currentStep, 'to', currentStep + 1);
-      setCurrentStep((prev) => (prev + 1) as Step);
+      setCurrentStep((prev: Step) => (prev + 1) as Step);
     }
 
   };
@@ -360,7 +365,7 @@ export default function Onboarding() {
       const tierConfig = getTierConfig(selectedTier);
       const today = new Date();
       const nextScanDate = new Date();
-      nextScanDate.setDate(today.getDate() + 7);
+      nextScanDate.setDate(today.getDate() + 7); // Changed from 3 to 7
       
       const { error: subscriptionError } = await supabase.from('watchdog_subscribers').upsert({
         profile_id: profile.id,
@@ -664,40 +669,34 @@ export default function Onboarding() {
     }
   };
 
-  const handlePaymentSuccess = async (paymentMethodId: string) => {
+  const handlePaymentRedirect = async () => {
     if (!profile || !user?.email) return;
 
     setLoading(true);
     setPaymentError('');
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('process-payment', {
-        body: {
-          action: 'subscribe',
-          payment_method_id: paymentMethodId,
-          profile_id: profile.id,
-          user_email: user.email,
-          company_id: currentCompany?.id,
-          tier: selectedTier,
-          billing_period: 'monthly',
-        },
-      });
-
-      if (functionError) {
-        throw new Error(functionError.message || 'Payment processing failed');
+      const tierConfig = TIER_CONFIGS[selectedTier];
+      if (!tierConfig?.paymentLink) {
+        throw new Error('Payment link not found for selected tier');
       }
 
-      if (data && data.success) {
-        await handleFinish();
-      } else {
-        throw new Error(data?.error || 'Payment failed');
-      }
-    } catch (error) {
-      console.error('Payment error:', error);
-      setPaymentError(error.message || 'Payment failed. Please try again.');
+      // Redirect to Stripe Payment Link in the SAME tab
+      // We pass the profile ID as client_reference_id so the Webhook can identify the user
+      const stripeUrl = new URL(tierConfig.paymentLink);
+      stripeUrl.searchParams.set('client_reference_id', profile.id);
+      stripeUrl.searchParams.set('prefilled_email', user.email);
+      // We also pass success_url if supported by the link, but normally it's set in the Dashboard
+      
+      window.location.href = stripeUrl.toString();
+    } catch (error: any) {
+      console.error('Payment redirect error:', error);
+      setPaymentError(error.message || 'Failed to redirect to payment. Please try again.');
       setLoading(false);
     }
   };
+
+  // handlePaymentSuccess and legacy process-payment removed
 
   const handlePaymentError = (error: string) => {
     setPaymentError(error);
@@ -1364,19 +1363,33 @@ export default function Onboarding() {
                 <div className="bg-slate-50 rounded-[32px] p-8 border-2 border-slate-100">
                   <div className="mb-8 flex items-center gap-3 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
                      <Zap className="w-4 h-4 text-indigo-600" strokeWidth={3} />
-                     <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">3-Day Free Trial Active</span>
+                     <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">7-Day Free Trial Active</span>
                   </div>
                   
-                  <Elements stripe={stripePromise}>
-                    <StripeCardInput
-                      onSuccess={handlePaymentSuccess}
-                      onError={handlePaymentError}
-                      buttonText={`Activate Account - ${formatCurrency(pricing.monthly)}/month`}
-                      amount={pricing.monthly}
-                      description={`Securely process your subscription. Cancel anytime.`}
-                      isLoading={loading}
-                    />
-                  </Elements>
+                  <div className="space-y-6">
+                    <p className="text-sm text-slate-600 font-bold leading-relaxed">
+                      You will be redirected to Stripe to securely complete your setup. Your 7-day free trial starts today, and you won't be charged until it ends.
+                    </p>
+                    
+                    <button
+                      onClick={handlePaymentRedirect}
+                      disabled={loading}
+                      className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all flex items-center justify-center gap-3 group"
+                    >
+                      {loading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          Confirm & Continue to Stripe
+                          <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        </>
+                      )}
+                    </button>
+                    
+                    <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">
+                      Cancel anytime in your billing dashboard
+                    </p>
+                  </div>
 
                   {paymentError && (
                     <div className="mt-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">

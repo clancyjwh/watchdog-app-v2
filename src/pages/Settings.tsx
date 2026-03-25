@@ -602,7 +602,7 @@ export default function SettingsPage() {
                       <Info className="w-3 h-3" /> Note
                     </h4>
                     <p className="text-[11px] text-indigo-700/80 font-bold leading-relaxed">
-                      Changes trigger a background re-sync. Make.com endpoints will update within 60 seconds.
+                      Changes trigger a background re-sync. Your monitoring pipeline will update with these new settings on the next scan cycle.
                     </p>
                 </div>
               </div>

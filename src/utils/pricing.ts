@@ -7,6 +7,7 @@ export type TierFeatures = {
   monthlyCredits: number;
   maxResults: number;
   resultsChangeable: boolean;
+  paymentLink: string;
   features: string[];
 };
 
@@ -27,8 +28,9 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     maxResults: 5,
     resultsChangeable: false,
     productId: 'prod_TqxKX5neHjRYiu',
+    paymentLink: 'https://buy.stripe.com/7sYaEXd0MeDz2uTerlfMA05',
     features: [
-      '3-day free trial included',
+      '7-day free trial included',
       '100 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
@@ -43,8 +45,9 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     maxResults: 5,
     resultsChangeable: false,
     productId: 'prod_TqxLzaw1hDuXLo',
+    paymentLink: 'https://buy.stripe.com/aFa7sL9OAcvr3yX3MHfMA04',
     features: [
-      '3-day free trial included',
+      '7-day free trial included',
       '300 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
@@ -60,8 +63,9 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     maxResults: 10,
     resultsChangeable: true,
     productId: 'prod_U7pGAo3uBjGCkb',
+    paymentLink: 'https://buy.stripe.com/4gM28rgcYfHD8Th6YTfMA03',
     features: [
-      '3-day free trial included',
+      '7-day free trial included',
       '600 manual scan credits/month',
       'AI relevance scoring',
       'Dashboard delivery',
