@@ -30,7 +30,6 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     features: [
       '3-day free trial included',
       '100 manual scan credits/month',
-      'Up to 5 results per scan',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
@@ -47,7 +46,6 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     features: [
       '3-day free trial included',
       '300 manual scan credits/month',
-      'Up to 5 results per scan',
       'AI relevance scoring',
       'Dashboard delivery',
       'Priority support',
@@ -65,11 +63,10 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierFeatures & { productId: 
     features: [
       '3-day free trial included',
       '600 manual scan credits/month',
-      'Up to 10 results per scan (customizable)',
       'AI relevance scoring',
       'Dashboard delivery',
-      'Custom update frequency (Daily, Bi-Weekly, Weekly)',
-      'Email delivery (Slack & Teams coming soon)',
+      'Custom update frequency',
+      'Email delivery (Slack/Teams soon)',
       'Priority support',
       'Advanced analytics',
     ],

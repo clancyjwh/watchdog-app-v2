@@ -1319,10 +1319,17 @@ export default function Onboarding() {
                     <div className="inline-block px-3 py-1 bg-indigo-500/20 rounded-lg border border-indigo-500/30 text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-6">
                       Selected Plan
                     </div>
-                    <h3 className="text-3xl font-black text-white tracking-tight mb-2 uppercase">{getTierConfig(selectedTier).name} Plan</h3>
-                    <p className="text-slate-400 font-bold text-xs leading-relaxed max-w-[200px]">
-                       Proactive monitoring with daily scans and unlimited custom topics.
-                    </p>
+                    <h3 className="text-3xl font-black text-white tracking-tight mb-4 uppercase">{getTierConfig(selectedTier).name} Plan</h3>
+                    <ul className="space-y-3 mb-8">
+                      {getTierConfig(selectedTier).features.map((feature, idx) => (
+                        <li key={idx} className="flex items-center gap-2 group/feat">
+                          <div className="w-5 h-5 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover/feat:bg-indigo-500/30 transition-colors">
+                            <Check className="w-3 h-3 text-indigo-400" strokeWidth={4} />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-300 uppercase tracking-tight group-hover/feat:text-white transition-colors">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
                   <div className="relative z-10 space-y-4 border-t border-white/5 pt-8 mt-12">
