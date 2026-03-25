@@ -270,7 +270,7 @@ export async function triggerScannerWebhook(
   frequency: string, 
   isManual: boolean = false,
   extraData: any = {}
-): Promise<boolean> {
+): Promise<any> {
   const WEBHOOK_URL = 'https://hook.us2.make.com/pgl69xy425vg3zasl4v0j9qs18ogk9hu';
 
   try {
@@ -288,9 +288,15 @@ export async function triggerScannerWebhook(
       }),
     });
 
-    return response.ok;
+    if (!response.ok) {
+      console.warn('Scanner webhook returned error:', response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('Error triggering scanner webhook:', error);
-    return false;
+    return null;
   }
 }

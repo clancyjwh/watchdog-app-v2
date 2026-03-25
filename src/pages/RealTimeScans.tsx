@@ -112,8 +112,7 @@ export default function RealTimeScans() {
       const today = new Date().toISOString().split('T')[0];
       
       // TRIGGER THE RESEARCH ENGINE (Handles 100% of the research logic)
-      // Non-blocking call to allow the user to navigate away while it runs in background
-      triggerScannerWebhook(
+      const result = await triggerScannerWebhook(
         user.id, 
         currentCompany?.subscription_frequency || 'weekly', 
         true,
@@ -127,14 +126,60 @@ export default function RealTimeScans() {
           email: profile?.email,
           location: `${currentCompany?.location_city}, ${currentCompany?.location_province}, ${currentCompany?.location_country}`
         }
-      ).catch(err => console.error('Webhook trigger background error:', err));
+      );
 
-      // Update company state to show scanning in progress (survives refresh)
+      if (result) {
+        // Parse "Top Stories" which comes back as a stringified JSON blob from the engine
+        let extractedData: any = {};
+        try {
+          const rawTopStories = result['Top Stories'] || result.top_stories_json || result.data;
+          extractedData = typeof rawTopStories === 'string' ? JSON.parse(rawTopStories) : rawTopStories;
+        } catch (e) {
+          console.error("Failed to parse research data:", e);
+        }
+
+        const stories = extractedData?.top_stories || [];
+        
+        // Map engine output to our ScanSummary schema
+        const citations = stories.map((s: any, idx: number) => ({
+          number: idx + 1,
+          title: s.headline || s.title || 'Untitled Report',
+          url: s.url || '#',
+          source: s.source_name || 'Autonomous Agent',
+          relevance_score: s.relevance_score_0_100 || s.relevance_score || 85,
+          summary: s.summary || '',
+          content_type: s.content_type || 'intelligence',
+          primary_label: s.primary_label || 'Insight',
+          key_insights: s.key_insights || [],
+          next_steps: s.next_steps || []
+        }));
+
+        // Insert persistent result record
+        const { error: insertError } = await supabase.from('scan_summaries').insert({
+          profile_id: profile.id,
+          company_id: currentCompany?.id,
+          content_type: 'Manual Scan',
+          overview: stories[0]?.summary || 'Deep intelligence scan completed successfully.',
+          summary_text: stories[0]?.summary || '',
+          key_insights: stories[0]?.key_insights || [],
+          citations: citations,
+          article_count: stories.length,
+          scan_date: new Date().toISOString(),
+          is_read: false
+        });
+
+        if (insertError) console.error("Persistence error:", insertError);
+        
+        // Clear scanning state
+        await supabase.from('companies').update({ is_scanning: false }).eq('id', currentCompany.id);
+        await loadScanSummaries();
+        setScanLoading(false);
+        return;
+      }
+
+      // Fallback for long-running scans or failed direct responses
       await supabase.from('companies').update({ is_scanning: true }).eq('id', currentCompany.id);
-
-      // Success feedback
-      alert('Research Initialized! Our autonomous agents are now conducting the search. You can navigate away and the results will appear here automatically when ready.');
-      
+      alert('Research engine is working. You can navigate away and the results will appear here automatically.');
       await loadScanSummaries();
     } catch (error) {
       console.error('Scan error:', error);
