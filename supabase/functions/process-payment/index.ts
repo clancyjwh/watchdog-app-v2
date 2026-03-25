@@ -183,7 +183,9 @@ Deno.serve(async (req: Request) => {
             status: 'active',
             stripe_customer_id: customer.id,
             stripe_subscription_id: subscription.id,
-            subscription_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            monthly_price: Math.floor(price),
+            included_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
           }, { onConflict: 'profile_id' })
       ]);
       
