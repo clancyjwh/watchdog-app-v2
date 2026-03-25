@@ -45,8 +45,10 @@ type Source = {
 
 type Subscription = {
   id: string;
-  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  tier: 'basic' | 'premium' | 'enterprise';
+  status: string;
   monthly_price: number;
+  included_credits: number;
 };
 
 export default function SettingsPage() {
@@ -85,7 +87,7 @@ export default function SettingsPage() {
     try {
       const [topicsRes, subscriptionRes] = await Promise.all([
         supabase.from('topics').select('*').eq('company_id', currentCompany.id),
-        supabase.from('subscriptions').select('*').eq('profile_id', profile.id).maybeSingle(),
+        supabase.from('watchdog_subscribers').select('*').eq('profile_id', profile.id).maybeSingle(),
       ]);
 
       // Map current company data
@@ -97,12 +99,16 @@ export default function SettingsPage() {
       setLocationCity(currentCompany.location_city || '');
       setResultsPerScan(currentCompany.results_per_scan || 10);
       setAnalysisDepth(currentCompany.analysis_depth || 'standard');
+      
+      // Load frequency from company instead of subscription table
+      if (currentCompany.subscription_frequency) {
+        setFrequency(currentCompany.subscription_frequency);
+      }
 
       setTopics(topicsRes.data || []);
 
       if (subscriptionRes.data) {
         setSubscription(subscriptionRes.data);
-        setFrequency(subscriptionRes.data.frequency);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -177,7 +183,7 @@ export default function SettingsPage() {
   const handleRemoveTopic = async (id: string) => {
     try {
       await supabase.from('topics').delete().eq('id', id);
-      setTopics(topics.filter(t => t.id !== id));
+      setTopics(topics.filter((t: Topic) => t.id !== id));
     } catch (error) {
       console.error('Error removing topic:', error);
     }
@@ -188,7 +194,7 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      // 1. Update Company (Main source of truth now)
+      // 1. Update Company (Source of truth for profile and frequency)
       const { error: companyError } = await supabase
         .from('companies')
         .update({
@@ -200,6 +206,7 @@ export default function SettingsPage() {
           location_city: locationCity,
           analysis_depth: analysisDepth,
           results_per_scan: resultsPerScan,
+          subscription_frequency: frequency, // Critical: frequency lives here now
         })
         .eq('id', currentCompany.id);
 
@@ -211,16 +218,17 @@ export default function SettingsPage() {
         .update({ company_name: companyName })
         .eq('id', profile.id);
 
-      // 3. Update Sync/Subscription
-      // 3. Update Sync/Subscription (Using upsert to avoid 400/404)
-      const pricing = getCurrentPricing();
+      // 3. Update watchdog_subscribers (Source of truth for status/tier)
+      const tierConfig = getTierConfig(profile?.subscription_tier as SubscriptionTier || 'basic');
       const { error: subError } = await supabase
-        .from('subscriptions')
+        .from('watchdog_subscribers')
         .upsert({
           profile_id: profile.id,
-          frequency,
-          delivery_method: 'dashboard',
-          monthly_price: pricing.monthlyTotal,
+          company_id: currentCompany.id,
+          tier: profile?.subscription_tier || 'basic',
+          status: 'active',
+          monthly_price: tierConfig.monthlyPrice,
+          included_credits: tierConfig.monthlyCredits,
           updated_at: new Date().toISOString(),
         }, { 
           onConflict: 'profile_id' 
@@ -228,24 +236,28 @@ export default function SettingsPage() {
 
       if (subError) throw subError;
 
-      // 4. Webhook Sync
-      await syncSettingsToWebhook({
-        userId: user.id,
-        email: user.email || '',
-        companyId: currentCompany.id,
-        companyName: companyName,
-        industry,
-        description: businessDescription,
-        monitoringGoals: [],
-        topics: topics.map(t => t.topic_name),
-        sources: [], // Simplified for now
-        location: {
-          country: locationCountry,
-          province: locationProvince,
-          city: locationCity,
-        },
-        context: [],
-      });
+      // 4. Webhook Sync (Wrapped to be non-blocking to DB save)
+      try {
+        await syncSettingsToWebhook({
+          userId: user.id,
+          email: user.email || '',
+          companyId: currentCompany.id,
+          companyName: companyName,
+          industry,
+          description: businessDescription,
+          monitoringGoals: [],
+          topics: topics.map((t: Topic) => t.topic_name),
+          sources: [], 
+          location: {
+            country: locationCountry,
+            province: locationProvince,
+            city: locationCity,
+          },
+          context: [],
+        });
+      } catch (webhookError) {
+        console.warn('Webhook sync failed (non-fatal):', webhookError);
+      }
 
       await refreshProfile();
       alert('Configuration synchronized successfully!');
