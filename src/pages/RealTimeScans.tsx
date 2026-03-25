@@ -82,55 +82,31 @@ export default function RealTimeScans() {
       }
 
       const today = new Date().toISOString().split('T')[0];
-      const dateFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      // TRIGGER THE MAKE.COM AUTOMATION (Handles 100% of the research logic)
+      await triggerScannerWebhook(
+        user.id, 
+        currentCompany?.subscription_frequency || 'weekly', 
+        true,
+        {
+          company_name: currentCompany?.name,
+          industry: currentCompany?.industry,
+          description: currentCompany?.description,
+          monitoring_goals: currentCompany?.monitoring_goals,
+          topics: topics,
+          full_name: profile?.full_name,
+          email: profile?.email,
+          location: `${currentCompany?.location_city}, ${currentCompany?.location_province}, ${currentCompany?.location_country}`
+        }
+      );
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-perplexity-updates`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          topics,
-          sources: sources.map(s => ({ name: s.name, url: s.url })),
-          contentTypes: currentCompany?.content_types || ['news', 'legislation'],
-          businessDescription: currentCompany?.description || '',
-          industry: currentCompany?.industry || '',
-          monitoringGoals: currentCompany?.monitoring_goals || '',
-          dateFrom,
-          dateTo: today
-        }),
-      });
-
-      if (response.ok) {
-        // Trigger the manual scan webhook with full profile info
-        await triggerScannerWebhook(
-          user.id, 
-          currentCompany?.subscription_frequency || 'weekly', 
-          true,
-          {
-            company_name: currentCompany?.name,
-            industry: currentCompany?.industry,
-            description: currentCompany?.description,
-            monitoring_goals: currentCompany?.monitoring_goals,
-            topics: topics,
-            full_name: profile?.full_name,
-            email: profile?.email,
-            location: `${currentCompany?.location_city}, ${currentCompany?.location_province}, ${currentCompany?.location_country}`
-          }
-        );
-        await loadScanSummaries();
-        alert('Manual Research Scan Complete! New articles added to feed.');
-      } else {
-        throw new Error('Scan failed');
-      }
-
+      // Success feedback (Since research is async on the backend)
+      alert('Research Initialized! Your Make.com automation is now conducting the search. New articles will appear in your feed shortly.');
+      
+      await loadScanSummaries();
     } catch (error) {
       console.error('Scan error:', error);
-      alert('Failed to run scan. Please try again.');
+      alert('Failed to initialize scan. Please ensure you have enough credits.');
     } finally {
       setScanLoading(false);
     }

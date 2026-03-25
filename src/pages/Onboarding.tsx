@@ -380,62 +380,23 @@ export default function Onboarding() {
         current_period_end: nextScanDate.toISOString(),
       }, { onConflict: 'profile_id' });
 
-      // 5. Trigger immediate scan before doing complex company updates
+      // 5. TRIGGER INITIAL STRATEGIC RESEARCH (100% via Make.com Webhook)
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const dateFromObj = new Date();
-        dateFromObj.setDate(dateFromObj.getDate() - 7);
-        const dateFrom = dateFromObj.toISOString().split('T')[0];
-
-        const perplexityResponse = await fetch(`${supabaseUrl}/functions/v1/fetch-perplexity-updates`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
+        await triggerScannerWebhook(
+          user.id, 
+          frequency, 
+          false, // Not moving to manual, this is the automated logic trigger
+          {
+            company_name: companyName,
+            industry: industry,
+            description: businessDescription,
+            monitoring_goals: monitoringGoals.join(', '),
             topics: selectedTopics,
-            sources: sourcesData.map(s => ({ name: s.name, url: s.url })),
-            contentTypes: selectedContentTypes,
-            businessDescription,
-            industry,
-            monitoringGoals: monitoringGoals.join(', '),
-            dateFrom,
-            dateTo: today.toISOString().split('T')[0]
-          }),
-        });
-
-        if (perplexityResponse.ok) {
-           const perplexityData = await perplexityResponse.json();
-           const allUpdates = perplexityData.updates || [];
-           
-           // If we have updates, trigger receiving them (non-blocking)
-           if (allUpdates.length > 0) {
-              // NOTE: We MUST map the fields correctly to what receive-updates expects
-              const mappedUpdates = allUpdates.map((u: any) => ({
-                title: u.title,
-                content: u.summary || u.title,
-                sourceUrl: u.source_url,
-                originalUrl: u.original_url,
-                timestamp: u.published_at || new Date().toISOString(),
-                relevance_score: u.relevance_score,
-                relevance_reasoning: u.relevance_reasoning,
-                content_type: u.content_type,
-                source_name: u.source_name
-              }));
-
-              fetch(`${supabaseUrl}/functions/v1/receive-updates`, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
-                 body: JSON.stringify({ 
-                   userId: user?.id, 
-                   updates: mappedUpdates, 
-                   isManualScan: false 
-                 })
-              }).catch(e => console.warn('Receiving initial updates failed:', e));
-           }
-        }
+            full_name: profile?.full_name,
+            email: profile?.email,
+            location: `${locationCity}, ${locationProvince}, ${locationCountry}`
+          }
+        );
       } catch (scanError) {
         console.warn('Initial scan trigger failed (continuing to dashboard):', scanError);
       }
