@@ -304,6 +304,7 @@ async function syncCustomerFromStripe(customerId: string, stripe: Stripe, metada
 
         await supabase.from('watchdog_subscribers').upsert({
             profile_id: metadata.profile_id || customerData.user_id, // fallback to user_id if metadata is missing
+            company_id: metadata.company_id,
             tier: tier,
             status: subscription.status,
             stripe_customer_id: customerId,

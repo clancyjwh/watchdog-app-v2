@@ -677,6 +677,7 @@ export default function Onboarding() {
           payment_method_id: paymentMethodId,
           profile_id: profile.id,
           user_email: user.email,
+          company_id: currentCompany?.id,
           tier: selectedTier,
           billing_period: 'monthly',
         },

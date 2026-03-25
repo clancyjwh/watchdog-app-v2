@@ -178,13 +178,12 @@ Deno.serve(async (req: Request) => {
           .from('watchdog_subscribers')
           .upsert({
             profile_id: requestData.profile_id,
+            company_id: requestData.company_id,
             tier: tier,
             status: 'active',
             stripe_customer_id: customer.id,
             stripe_subscription_id: subscription.id,
-            monthly_price: price,
-            included_credits: tier === 'basic' ? 100 : tier === 'premium' ? 300 : 600,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            subscription_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
           }, { onConflict: 'profile_id' })
       ]);
       
@@ -208,6 +207,7 @@ Deno.serve(async (req: Request) => {
         confirm: true,
         metadata: {
           profile_id: requestData.profile_id,
+          company_id: requestData.company_id,
           type: 'credits',
           credits: String(requestData.credit_package?.credits || 0),
         },
