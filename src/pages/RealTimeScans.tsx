@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { triggerScannerWebhook } from '../utils/pricing';
 import Sidebar from '../components/Sidebar';
 import RelevanceModal from '../components/RelevanceModal';
+import ResultCard from '../components/ResultCard';
 
 export default function RealTimeScans() {
   const { user, profile, currentCompany, isAdmin, effectiveCredits, refreshProfile, loading: authLoading } = useAuth();
@@ -152,13 +153,19 @@ export default function RealTimeScans() {
           is_favourite: false
         }));
 
+        const syntheticOverview = stories.length > 0
+          ? `Based on ${stories.length} specialized intelligence signals, our analysis indicates: ` + stories.slice(0, Math.min(3, stories.length)).map((s: any) => s.summary).join(' ')
+          : 'Deep intelligence scan completed successfully with no critical signals found.';
+        
+        const combinedInsights = Array.from(new Set(stories.flatMap((s: any) => s.key_insights || []))).slice(0, 5);
+
         await supabase.from('scan_summaries').insert({
           profile_id: profile.id,
           company_id: currentCompany?.id,
           content_type: 'Manual Scan',
-          overview: stories[0]?.summary || 'Deep intelligence scan completed successfully.',
-          summary_text: stories[0]?.summary || '',
-          key_insights: stories[0]?.key_insights || [],
+          overview: syntheticOverview,
+          summary_text: syntheticOverview,
+          key_insights: combinedInsights,
           citations: citations,
           article_count: stories.length,
           scan_date: new Date().toISOString(),
@@ -379,55 +386,26 @@ export default function RealTimeScans() {
                               {summary.citations
                                 ?.sort((a: any, b: any) => (b.relevance_score || 0) - (a.relevance_score || 0))
                                 ?.map((cit: any, i: number) => (
-                                <div key={i} className="bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 hover:border-blue-500/30 transition-all duration-300 group/item relative overflow-hidden">
-                                   <div className="absolute inset-y-0 left-0 w-0 group-hover/item:w-1 bg-blue-600 transition-all duration-300" />
-                                   <div className="flex items-start justify-between gap-8">
-                                      <div className="flex-1 min-w-0">
-                                         <div className="flex items-center gap-3 mb-3">
-                                            <span className="text-[9px] font-black px-2 py-1 bg-slate-800 text-slate-400 rounded uppercase tracking-[0.2em] border border-slate-700">
-                                               {cit.content_type || 'intelligence'}
-                                            </span>
-                                            {cit.primary_label && (
-                                               <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-[0.2em] border ${
-                                                  cit.primary_label.toLowerCase() === 'risk' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 
-                                                  cit.primary_label.toLowerCase() === 'opportunity' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                                                  'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                               }`}>
-                                                  {cit.primary_label}
-                                               </span>
-                                            )}
-                                         </div>
-                                         <h5 className="text-xl font-bold text-slate-100 group-hover/item:text-blue-400 transition-colors leading-tight line-clamp-2">
-                                            {cit.headline || cit.title}
-                                         </h5>
-                                         <p className="text-sm text-slate-400 mt-3 line-clamp-2 font-medium leading-relaxed">
-                                            {cit.summary}
-                                         </p>
-                                         <div className="flex items-center justify-between mt-6">
-                                            <div className="flex items-center gap-4">
-                                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                                <Layers className="w-3 h-3" />
-                                                {cit.url ? new URL(cit.url).hostname.replace('www.', '') : 'Internal Intelligence'}
-                                              </span>
-                                            </div>
-                                            <a 
-                                              href={cit.url} 
-                                              target="_blank" 
-                                              rel="noopener noreferrer"
-                                              className="px-5 py-2 bg-slate-800 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 group/link shadow-lg"
-                                            >
-                                              Extract <ExternalLink className="w-3 h-3 group-hover/link:translate-x-0.5 transition-transform" />
-                                            </a>
-                                         </div>
-                                      </div>
-                                      <div className="flex flex-col items-center gap-2">
-                                        <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center shadow-inner group-hover/item:border-blue-500/20 transition-colors">
-                                           <span className="text-[8px] font-black text-slate-600 uppercase leading-none mb-1">SIGNAL</span>
-                                           <span className="text-base font-black text-slate-200">{cit.relevance_score || 85}</span>
-                                        </div>
-                                      </div>
-                                   </div>
-                                </div>
+                                  <ResultCard
+                                    key={i}
+                                    id={`${summary.id}-cit-${i}`}
+                                    title={cit.headline || cit.title || 'Untitled Report'}
+                                    summary={cit.summary || ''}
+                                    url={cit.url}
+                                    source={cit.source_name || cit.source || 'Deep Research'}
+                                    date={summary.scan_date}
+                                    relevanceScore={cit.relevance_score_0_100 || cit.relevance_score || 85}
+                                    relevanceReasoning={cit.justification || ''}
+                                    contentType={cit.content_type || 'intelligence'}
+                                    primaryLabel={cit.primary_label || 'Insight'}
+                                    keyInsights={cit.key_insights || []}
+                                    nextSteps={cit.next_steps || []}
+                                    isFavourite={cit.is_favourite || false}
+                                    onToggleFavourite={(e) => {
+                                      e.stopPropagation();
+                                      handleFavouriteReport(summary.id, !!cit.is_favourite);
+                                    }}
+                                  />
                               ))}
                               </div>
                            </div>

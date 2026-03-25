@@ -533,17 +533,25 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-5 mb-10 border-b border-white/5 pb-10">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center group relative">
                         <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Scan Frequency</span>
-                        <select
-                          value={frequency}
-                          onChange={(e) => setFrequency(e.target.value as any)}
-                          className="bg-slate-800 border-none rounded-xl px-3 py-1.5 text-xs font-black text-indigo-300 outline-none cursor-pointer"
-                        >
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
-                          <option value="biweekly">Bi-Weekly</option>
-                        </select>
+                         <div className="flex items-center gap-2">
+                            <select
+                              value={profile?.subscription_tier === 'enterprise' ? frequency : 'weekly'}
+                              onChange={(e) => setFrequency(e.target.value as any)}
+                              disabled={profile?.subscription_tier !== 'enterprise'}
+                              className="bg-slate-800 border-none rounded-xl px-3 py-1.5 text-xs font-black text-indigo-300 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              <option value="daily">Daily</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="biweekly">Bi-Weekly</option>
+                            </select>
+                            {profile?.subscription_tier !== 'enterprise' && (
+                              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 px-3 py-2 rounded-xl text-[9px] font-black text-white uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50">
+                                Upgrade to Enterprise to customize
+                              </div>
+                            )}
+                         </div>
                       </div>
                       <div className="flex justify-between items-center group relative">
                          <div className="flex flex-col">
@@ -569,20 +577,6 @@ export default function SettingsPage() {
                             )}
                          </div>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">AI Analysis Level</span>
-                        <div className="flex bg-slate-800 p-1 rounded-xl">
-                          <button
-                            onClick={() => setAnalysisDepth('standard')}
-                            className={`px-3 py-1 rounded-lg font-black uppercase text-[9px] transition-all ${analysisDepth === 'standard' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                          >Std</button>
-                          <button
-                            onClick={() => setAnalysisDepth('deep')}
-                            className={`px-3 py-1 rounded-lg font-black uppercase text-[9px] transition-all ${analysisDepth === 'deep' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                          >Manual</button>
-                        </div>
-                      </div>
-
                       <div className="pt-6 border-t border-white/5 space-y-3">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -590,7 +584,7 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>{analysisDepth === 'deep' ? 'Manual Scan intelligence included' : 'Standard AI Analysis'}</span>
+                          <span>Manual Scan intelligence included</span>
                         </div>
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />

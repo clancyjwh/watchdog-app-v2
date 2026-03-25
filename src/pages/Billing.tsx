@@ -166,6 +166,90 @@ export default function Billing() {
               </div>
             </div>
 
+            {/* Subscription Tiers */}
+            <div className="space-y-6">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h2 className="text-xl font-black">Available Plans</h2>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Upgrade or modify your subscription via Stripe</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  {
+                    name: 'Basic',
+                    price: 59,
+                    features: ['7-day free trial included', '100 manual scan credits/month', 'AI relevance scoring', 'Dashboard delivery', 'Priority support'],
+                    tierName: 'basic',
+                    popular: false,
+                  },
+                  {
+                    name: 'Premium',
+                    price: 99,
+                    features: ['7-day free trial included', '300 manual scan credits/month', 'AI relevance scoring', 'Dashboard delivery', 'Priority support', 'Advanced analytics'],
+                    tierName: 'premium',
+                    popular: true,
+                  },
+                  {
+                    name: 'Enterprise',
+                    price: 199,
+                    features: ['7-day free trial included', '600 manual scan credits/month', 'AI relevance scoring', 'Dashboard delivery', 'Custom update frequency', 'Email delivery (coming soon)', 'Priority support', 'Advanced analytics'],
+                    tierName: 'enterprise',
+                    popular: false,
+                  }
+                ].map((plan) => (
+                  <div
+                    key={plan.name}
+                    className={`relative bg-slate-900 border ${
+                      plan.tierName === profile?.subscription_tier
+                        ? 'border-blue-500 shadow-2xl shadow-blue-500/10'
+                        : 'border-slate-800'
+                    } rounded-3xl p-8 flex flex-col`}
+                  >
+                    {plan.popular && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-4 rounded-full">
+                        Most Popular
+                      </div>
+                    )}
+                    <div className="mb-8">
+                      <h3 className="text-xl font-black text-white mb-2">{plan.name}</h3>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-black text-white">${plan.price}</span>
+                        <span className="text-slate-400 font-bold text-sm">/mo</span>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={handleManageBilling}
+                      disabled={processingCheckout}
+                      className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest mb-8 transition-all flex items-center justify-center gap-2 ${
+                        plan.tierName === profile?.subscription_tier
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20'
+                          : plan.popular
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
+                          : 'bg-slate-800 hover:bg-slate-700 text-white'
+                      }`}
+                    >
+                      {processingCheckout 
+                        ? 'Redirecting...' 
+                        : plan.tierName === profile?.subscription_tier 
+                          ? 'Current Plan (Manage)' 
+                          : 'Switch Plan'}
+                    </button>
+
+                    <div className="space-y-4 flex-1">
+                      {plan.features.map((feature, idx) => (
+                        <div key={idx} className="flex items-start gap-3">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span className="text-sm text-slate-300">{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Invoices */}
             <div className="space-y-6">
               <h2 className="text-xl font-black">Billing History</h2>

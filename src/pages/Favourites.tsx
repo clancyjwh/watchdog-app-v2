@@ -10,6 +10,7 @@ import {
 import Sidebar from '../components/Sidebar';
 import RelevanceModal from '../components/RelevanceModal';
 import CompanySwitcher from '../components/CompanySwitcher';
+import ResultCard from '../components/ResultCard';
 
 interface FavouriteItem {
   id: string;
@@ -24,6 +25,9 @@ interface FavouriteItem {
   isFavourite: boolean;
   itemType: 'automated' | 'manual';
   raw_data?: any;
+  primaryLabel?: string;
+  keyInsights?: string[];
+  nextSteps?: string[];
 }
 
 export default function Favourites() {
@@ -57,11 +61,10 @@ export default function Favourites() {
         updatesQuery = updatesQuery.eq('profile_id', profile.id);
       }
 
-      // 2. Fetch Favourited Manual Scan Summaries
+      // 2. Fetch all Manual Scan Summaries (to unwrap citations)
       let scansQuery = supabase
         .from('scan_summaries')
-        .select('*')
-        .eq('is_favourite', true);
+        .select('*');
 
       if (currentCompany?.id) {
         scansQuery = scansQuery.eq('company_id', currentCompany.id);
@@ -88,24 +91,29 @@ export default function Favourites() {
         itemType: 'automated'
       }));
 
-      const manualItems: FavouriteItem[] = (scansRes.data || []).map(s => ({
-        id: s.id,
-        title: `Deep Research Report: ${new Date(s.scan_date).toLocaleDateString()}`,
-        summary: s.overview,
-        url: null,
-        source: 'Deep Research',
-        date: s.scan_date,
-        relevanceScore: 100,
-        relevanceReasoning: 'Strategic intelligence report marked for priority review.',
-        contentType: s.content_type || 'strategic-report',
-        isFavourite: true,
-        itemType: 'manual',
-        raw_data: s
-      }));
-
-      const combined = [...automatedItems, ...manualItems].sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const manualItems: FavouriteItem[] = (scansRes.data || []).flatMap(s => 
+        (s.citations || []).map((cit: any, idx: number) => ({
+          id: `${s.id}-cit-${idx}`,
+          title: cit.headline || cit.title || 'Untitled',
+          summary: cit.summary || '',
+          url: cit.url,
+          source: cit.source_name || cit.source || 'Deep Research',
+          date: s.scan_date,
+          relevanceScore: cit.relevance_score_0_100 || cit.relevance_score || 100,
+          relevanceReasoning: cit.justification || '',
+          contentType: cit.content_type || 'strategic-report',
+          isFavourite: cit.is_favourite || false,
+          itemType: 'manual',
+          raw_data: { ...cit, parentScanId: s.id, parentScanIndex: idx },
+          primaryLabel: cit.primary_label || 'Insight',
+          keyInsights: cit.key_insights || [],
+          nextSteps: cit.next_steps || [],
+        }))
       );
+
+      const combined = [...automatedItems, ...manualItems]
+        .filter(item => item.isFavourite)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setItems(combined);
     } catch (err) {
@@ -117,13 +125,25 @@ export default function Favourites() {
 
   const removeFavourite = async (item: FavouriteItem) => {
     try {
-      const table = item.itemType === 'automated' ? 'updates' : 'scan_summaries';
-      const { error } = await supabase
-        .from(table)
-        .update({ is_favourite: false })
-        .eq('id', item.id);
-      
-      if (error) throw error;
+      if (item.itemType === 'automated') {
+        const { error } = await supabase
+          .from('updates')
+          .update({ is_favourite: false })
+          .eq('id', item.id);
+        if (error) throw error;
+      } else {
+        const parentId = item.raw_data.parentScanId;
+        const scanRes = await supabase.from('scan_summaries').select('citations').eq('id', parentId).single();
+        if (scanRes.data && scanRes.data.citations) {
+          const updatedCitations = [...scanRes.data.citations];
+          updatedCitations[item.raw_data.parentScanIndex] = {
+            ...updatedCitations[item.raw_data.parentScanIndex],
+            is_favourite: false
+          };
+          const { error } = await supabase.from('scan_summaries').update({ citations: updatedCitations }).eq('id', parentId);
+          if (error) throw error;
+        }
+      }
       setItems(prev => prev.filter(i => i.id !== item.id));
     } catch (err) {
       console.error('Error removing favourite:', err);
@@ -198,69 +218,27 @@ export default function Favourites() {
                  </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 {filteredItems.map((item) => (
-                  <div 
+                  <ResultCard
                     key={item.id}
-                    className={`glass-card group relative p-8 border transition-all duration-300 bg-slate-900/40 border-slate-800/50 hover:border-blue-500/30 flex flex-col`}
-                  >
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-[0.2em] border ${
-                          item.itemType === 'manual' ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-800 text-slate-400 border-slate-700'
-                        }`}>
-                          {item.source}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                          {new Date(item.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      
-                      <button 
-                        onClick={() => removeFavourite(item)}
-                        className="p-2.5 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all border border-red-500/20"
-                      >
-                        <Heart className="w-4 h-4 fill-red-500" />
-                      </button>
-                    </div>
-
-                    <h3 className="text-xl font-bold leading-tight mb-4 text-white group-hover:text-blue-400 transition-colors">
-                      {item.title}
-                    </h3>
-                    <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8 flex-1">
-                      {item.summary}
-                    </p>
-
-                    <div className="flex items-center justify-between pt-6 border-t border-slate-800/50">
-                       <button
-                         onClick={() => setSelectedItem(item)}
-                         className="flex items-center gap-2 text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
-                       >
-                         <Info className="w-4 h-4" />
-                         Analysis
-                       </button>
-                       
-                       {item.url ? (
-                         <a 
-                           href={item.url} 
-                           target="_blank" 
-                           rel="noopener noreferrer"
-                           className="flex items-center gap-2 text-[10px] font-black text-blue-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
-                         >
-                           Source
-                           <ExternalLink className="w-3.5 h-3.5" />
-                         </a>
-                       ) : (
-                         <button 
-                           onClick={() => navigate('/scans')}
-                           className="flex items-center gap-2 text-[10px] font-black text-blue-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
-                         >
-                           View Scan
-                           <Activity className="w-3.5 h-3.5" />
-                         </button>
-                       )}
-                    </div>
-                  </div>
+                    id={item.id}
+                    title={item.title}
+                    summary={item.summary}
+                    url={item.url || ''}
+                    source={item.source}
+                    date={item.date}
+                    relevanceScore={item.relevanceScore}
+                    relevanceReasoning={item.relevanceReasoning}
+                    contentType={item.contentType}
+                    isFavourite={item.isFavourite}
+                    primaryLabel={item.primaryLabel}
+                    keyInsights={item.keyInsights}
+                    onToggleFavourite={(e) => {
+                      e.stopPropagation();
+                      removeFavourite(item);
+                    }}
+                  />
                 ))}
               </div>
             )}

@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { getNextDeliveryDate, formatNextDeliveryDate, getFrequencyLabel } from '../utils/pricing';
 import SourceRelevanceRating from '../components/SourceRelevanceRating';
 import ContentTag from '../components/ContentTag';
+import ResultCard from '../components/ResultCard';
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth();
@@ -128,18 +129,18 @@ export default function Dashboard() {
     navigate('/login');
   };
 
-  const toggleSaveUpdate = async (updateId: string, currentlySaved: boolean) => {
+  const toggleFavourite = async (updateId: string, currentlyFavourite: boolean) => {
     try {
       await supabase
         .from('updates')
-        .update({ is_saved: !currentlySaved })
+        .update({ is_favourite: !currentlyFavourite })
         .eq('id', updateId);
 
       setUpdates(prev => prev.map(u =>
-        u.id === updateId ? { ...u, is_saved: !currentlySaved } : u
+        u.id === updateId ? { ...u, is_favourite: !currentlyFavourite } : u
       ));
     } catch (error) {
-      console.error('Error toggling save:', error);
+      console.error('Error toggling favourite:', error);
     }
   };
 
@@ -492,88 +493,25 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {filteredUpdates.map((update) => {
-                      return (
-                        <div
-                          key={update.id}
-                          className="bg-white border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-start justify-between gap-4 mb-4">
-                            <h2 className="text-2xl font-bold text-gray-900 leading-tight flex-1">
-                              {update.title}
-                            </h2>
-                            {update.content_type && (
-                              <ContentTag contentType={update.content_type} size="md" />
-                            )}
-                          </div>
-
-                          <div className="mb-6">
-                            <p className="text-sm font-bold text-gray-900 mb-2">Summary:</p>
-                            <p className="text-base text-gray-700 leading-relaxed">
-                              {update.summary}
-                            </p>
-                          </div>
-
-                          {update.relevance_reasoning && (
-                            <div className="mb-6">
-                              <p className="text-sm font-bold text-gray-900 mb-2">Why it matters:</p>
-                              <p className="text-base text-gray-700 leading-relaxed">
-                                {update.relevance_reasoning}
-                              </p>
-                            </div>
-                          )}
-
-                          {isAIDiscoveredSource(update) && (
-                            <div className="mb-6">
-                              <SourceRelevanceRating
-                                sourceId={getSourceId(update)}
-                                sourceName={update.source_name}
-                                updateId={update.id}
-                                onSourceBlocked={() => loadData()}
-                              />
-                            </div>
-                          )}
-
-                          <div className="mb-6">
-                            <p className="text-sm font-bold text-gray-900 mb-1">Date:</p>
-                            <p className="text-base text-gray-700">{formatDate(update.published_at)}</p>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                            <a
-                              href={update.original_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-                            >
-                              <FileText className="w-4 h-4" />
-                              Read Full Article
-                            </a>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => toggleSaveUpdate(update.id, update.is_saved)}
-                                className={`p-2 transition-colors ${
-                                  update.is_saved
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : 'text-gray-400 hover:bg-gray-100'
-                                }`}
-                                title={update.is_saved ? 'Remove from Archive' : 'Save to Archive'}
-                              >
-                                <Heart className={`w-5 h-5 ${update.is_saved ? 'fill-current' : ''}`} />
-                              </button>
-                              <button
-                                onClick={() => deleteUpdate(update.id)}
-                                className="p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
-                                title="Remove article"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {filteredUpdates.map((update) => (
+                      <ResultCard
+                        key={update.id}
+                        id={update.id}
+                        title={update.title}
+                        summary={update.summary}
+                        url={update.original_url || update.url}
+                        source={update.source_name}
+                        date={update.published_at}
+                        relevanceScore={update.relevance_score || 0}
+                        relevanceReasoning={update.relevance_reasoning || ''}
+                        contentType={update.content_type}
+                        isFavourite={update.is_favourite || false}
+                        onToggleFavourite={(e) => {
+                          e.stopPropagation();
+                          toggleFavourite(update.id, !!update.is_favourite);
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
